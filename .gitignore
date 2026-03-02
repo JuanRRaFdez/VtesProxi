@@ -15,11 +15,15 @@ env/
 *.log
 local_settings.py
 
-# Media generada por usuarios (no subir imágenes personales)
-media/imagenes/
-media/recortes/
-media/render/
-media/cartas/
+# Media generada por usuarios (ignorar contenido, preservar carpetas con .gitkeep)
+media/imagenes/*
+media/recortes/*
+media/render/*
+media/cartas/*
+!media/imagenes/.gitkeep
+!media/recortes/.gitkeep
+!media/render/.gitkeep
+!media/cartas/.gitkeep
 
 # Estáticos compilados
 staticfiles/
