@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Recortar imagen</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <style>
+        #preview {
+            width: 300px;
+            height: 420px;
+            border: 1px solid #ccc;
+            margin-top: 10px;
+        }
+        #recortarBtn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Recortar imagen</h2>
+    <input type="file" id="inputImagen" accept="image/*" style="display:none;">
+    <img id="imagen" style="max-width:100%; display:none;">
+    <div id="preview"></div>
+    <button id="recortarBtn" style="display:none;">Aceptar recorte</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script>
+        let cropper;
+        const input = document.getElementById('inputImagen');
+        const img = document.getElementById('imagen');
+        const preview = document.getElementById('preview');
+        const recortarBtn = document.getElementById('recortarBtn');
+        // Lanzar automáticamente el input de archivo al cargar la página
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() { input.click(); }, 100);
+        });
+        input.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    img.src = evt.target.result;
+                    img.style.display = 'block';
+                    recortarBtn.style.display = 'inline-block';
+                    if (cropper) cropper.destroy();
+                    cropper = new Cropper(img, {
+                        aspectRatio: 63/88,
+                        viewMode: 1,
+                        preview: preview,
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        recortarBtn.addEventListener('click', function() {
+            if (cropper) {
+                cropper.getCroppedCanvas({width: 300, height: 420}).toBlob(function(blob) {
+                    const formData = new FormData();
+                    formData.append('imagen', blob, 'recorte.jpg');
+                    fetch('', {
+                        method: 'POST',
+                        body: formData
+                    }).then(response => {
+                        if (response.redirected) {
+                            window.location.href = response.url;
+                        }
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>

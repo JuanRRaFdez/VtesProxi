@@ -1,0 +1,662 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Importar imagen de cripta{% endblock %}
+{% block extra_head %}
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <style>
+        @font-face {
+            font-family: 'MatrixExtraBold';
+            src: url("{% static 'fonts/MatrixExtraBold.otf' %}") format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        .main-container {
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+            padding: 1rem 1.2rem;
+            width: 100%;
+            height: calc(100vh - 80px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .title {
+            font-weight: 700;
+            margin-bottom: 0.6rem;
+            color: #232526;
+            text-align: center;
+            font-size: 0.95rem;
+        }
+        #recorteContainer {
+            margin: 0 auto 0.5rem auto;
+            text-align: center;
+        }
+        #imagen {
+            max-width: 100%;
+            max-height: 35vh;
+            display: none;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        #recortarBtn {
+            margin-top: 10px;
+            padding: 6px 14px;
+            font-size: 14px;
+            width: 100%;
+        }
+        #importarBtn {
+            width: 100%;
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 0.6rem;
+        }
+        #preview { display: none; }
+        .recorte-label {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: #232526;
+        }
+        .recorte-img {
+            display: block;
+            margin: 0 auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            max-width: 100%;
+            max-height: calc(100vh - 180px);
+            object-fit: contain;
+        }
+        #nombre {
+            font-family: 'MatrixExtraBold', serif;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+        }
+        .form-label { margin-bottom: 0.15rem; font-size: 0.8rem; }
+        .form-control, .form-select { font-size: 0.85rem; padding: 0.25rem 0.5rem; }
+        .mb-2 { margin-bottom: 0.4rem !important; }
+        .disc-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            padding: 3px 0;
+        }
+        .disc-icon {
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 2px;
+            border: 2px solid transparent;
+            transition: all 0.15s ease;
+            box-sizing: border-box;
+        }
+        .disc-icon.state-none {
+            filter: grayscale(1);
+            opacity: 0.3;
+        }
+        .disc-icon.state-inf {
+            filter: none;
+            opacity: 1;
+        }
+        .disc-icon.state-sup {
+            filter: none;
+            opacity: 1;
+            border-color: #d4af37;
+            background: rgba(212,175,55,0.12);
+        }
+        .disc-icon:hover {
+            opacity: 0.85;
+            transform: scale(1.15);
+        }
+    </style>
+{% endblock %}
+{% block content %}
+<div class="container-fluid px-2" style="height: calc(100vh - 56px); overflow: hidden;">
+    <div class="row g-2 h-100 align-items-start pt-2">
+        <!-- Columna izquierda: Imagen -->
+        <div class="col-md-5 col-lg-4">
+            <div class="main-container">
+                <input type="file" id="inputImagen" accept="image/*" style="display:none;">
+                <button id="importarBtn" class="btn btn-primary btn-sm mb-2">Importar imagen</button>
+                <div id="recorteContainer" style="display:none;">
+                    <img id="imagen">
+                    <div id="preview"></div>
+                    <button id="recortarBtn" class="btn btn-success mt-2" style="display:none;">Aceptar recorte</button>
+                </div>
+                {% if imagen_url %}
+                    <img src="{{ imagen_url }}" alt="Imagen cripta" class="recorte-img">
+                {% endif %}
+            </div>
+        </div>
+        <!-- Columna derecha: Formulario -->
+        <div class="col-md-7 col-lg-8">
+            <div class="main-container">
+                <div class="title">Datos de la carta</div>
+                <form>
+                    {% csrf_token %}
+                    <!-- Fila 1: Nombre -->
+                    <div class="mb-2">
+                        <label for="nombre" class="form-label">Nombre</label>
+                        <input type="text" class="form-control form-control-sm" id="nombre" name="nombre" placeholder="Nombre de la carta">
+                    </div>
+                    <!-- Fila 2: Clan + Senda -->
+                    <div class="row g-2 mb-2">
+                        <div class="col-6">
+                            <label for="clan" class="form-label">Clan</label>
+                            <select class="form-select form-select-sm" id="clan-select" name="clan">
+                                <option value="">-</option>
+                                {% for clan in clanes %}
+                                    <option value="{{ clan }}">{{ clan|cut:'.png'|title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label for="senda" class="form-label">Senda</label>
+                            <select class="form-select form-select-sm" id="senda-select" name="senda">
+                                <option value="">-</option>
+                                {% for senda in sendas %}
+                                    <option value="{{ senda }}">{{ senda|cut:'.png'|title }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <!-- Fila 3: Cripta + Coste -->
+                    <div class="row g-2 mb-2">
+                        <div class="col-4">
+                            <label for="cripta" class="form-label">Cripta</label>
+                            <select class="form-select form-select-sm" id="cripta" name="cripta">
+                                <option value="">-</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label for="coste" class="form-label">Coste</label>
+                            <select class="form-select form-select-sm" id="coste" name="coste">
+                                <option value="">-</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                                <option value="10">10</option>
+                                <option value="11">11</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label for="ilustrador" class="form-label">Ilustrador</label>
+                            <input type="text" class="form-control form-control-sm" id="ilustrador" name="ilustrador" placeholder="Ilustrador">
+                        </div>
+                    </div>
+                    <!-- Fila 4: Disciplinas -->
+                    <div class="mb-2">
+                        <label class="form-label">Disciplinas</label>
+                        <div id="disc-grid" class="disc-grid"></div>
+                    </div>
+                    <!-- Fila 5: Habilidad -->
+                    <div class="mb-2">
+                        <label for="habilidad" class="form-label">Habilidad <small class="text-muted">(Ctrl+Enter)</small></label>
+                        <textarea class="form-control form-control-sm" id="habilidad" name="habilidad" rows="3" placeholder="Sabbat cardinal: Texto de habilidad (cursiva). +1 bleed."></textarea>
+                    </div>
+                    <!-- Fila 6: Transparencia -->
+                    <div class="mb-2">
+                        <label for="hab-opacity" class="form-label mb-0">Transparencia fondo: <span id="hab-opacity-val">70%</span></label>
+                        <input type="range" class="form-range" id="hab-opacity" min="0" max="255" value="180" step="5">
+                    </div>
+                    <!-- Guardar carta -->
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        <button type="button" id="guardarCartaBtn" class="btn btn-warning btn-sm">💾 Guardar carta</button>
+                        <span id="guardar-feedback" class="small"></span>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+    <script>
+        // --- NUEVO JS UNIFICADO PARA RENDERIZAR NOMBRE Y CLAN ---
+        const clanSelect = document.getElementById('clan-select');
+        const sendaSelect = document.getElementById('senda-select');
+        const nombreInput = document.getElementById('nombre');
+        function getCartaImg() {
+            return document.querySelector('.recorte-img');
+        }
+
+        // --- Discipline data and state ---
+        const DISCIPLINES = {
+            'abo': {name: 'Abombwe', hasSup: true},
+            'ani': {name: 'Animalism', hasSup: true},
+            'aus': {name: 'Auspex', hasSup: true},
+            'cel': {name: 'Celerity', hasSup: true},
+            'chi': {name: 'Chimerstry', hasSup: true},
+            'dai': {name: 'Daimoinon', hasSup: true},
+            'def': {name: 'Defense', hasSup: false},
+            'dem': {name: 'Dementation', hasSup: true},
+            'dom': {name: 'Dominate', hasSup: true},
+            'flight': {name: 'Flight', hasSup: false},
+            'for': {name: 'Fortitude', hasSup: true},
+            'inn': {name: 'Innocence', hasSup: false},
+            'jus': {name: 'Judgment', hasSup: false},
+            'mal': {name: 'Maleficia', hasSup: true},
+            'mar': {name: 'Martyrdom', hasSup: false},
+            'mel': {name: 'Melpominee', hasSup: true},
+            'myt': {name: 'Mytherceria', hasSup: true},
+            'nec': {name: 'Necromancy', hasSup: true},
+            'obe': {name: 'Obeah', hasSup: true},
+            'obf': {name: 'Obfuscate', hasSup: true},
+            'obl': {name: 'Oblivion', hasSup: true},
+            'obt': {name: 'Obtenebration', hasSup: true},
+            'pot': {name: 'Potence', hasSup: true},
+            'pre': {name: 'Presence', hasSup: true},
+            'pro': {name: 'Protean', hasSup: true},
+            'qui': {name: 'Quietus', hasSup: true},
+            'red': {name: 'Redemption', hasSup: false},
+            'san': {name: 'Sanguinus', hasSup: true},
+            'ser': {name: 'Serpentis', hasSup: true},
+            'spi': {name: 'Spiritus', hasSup: true},
+            'str': {name: 'Striga', hasSup: true},
+            'tem': {name: 'Temporis', hasSup: true},
+            'tha': {name: 'Thanatosis', hasSup: true},
+            'thn': {name: 'Thaumaturgy', hasSup: true},
+            'val': {name: 'Valeren', hasSup: true},
+            'ven': {name: 'Vengeance', hasSup: false},
+            'vic': {name: 'Vicissitude', hasSup: true},
+            'vin': {name: 'Vision', hasSup: false},
+            'vis': {name: 'Visceratika', hasSup: true},
+        };
+        let discStates = {}; // key -> 'none' | 'inf' | 'sup'
+
+        function buildDiscGrid() {
+            const grid = document.getElementById('disc-grid');
+            if (!grid) return;
+            for (const [key, disc] of Object.entries(DISCIPLINES)) {
+                discStates[key] = 'none';
+                const img = document.createElement('img');
+                img.src = '/static/disc_inf/' + key + '.svg';
+                img.alt = disc.name;
+                img.title = disc.name;
+                img.className = 'disc-icon state-none';
+                img.dataset.disc = key;
+                img.addEventListener('click', function() { cycleDisc(key, img); });
+                grid.appendChild(img);
+            }
+        }
+
+        function cycleDisc(key, img) {
+            const disc = DISCIPLINES[key];
+            const current = discStates[key];
+            if (current === 'none') {
+                discStates[key] = 'inf';
+                img.src = '/static/disc_inf/' + key + '.svg';
+                img.className = 'disc-icon state-inf';
+            } else if (current === 'inf' && disc.hasSup) {
+                discStates[key] = 'sup';
+                img.src = '/static/disc_sup/' + key + '.svg';
+                img.className = 'disc-icon state-sup';
+            } else {
+                discStates[key] = 'none';
+                img.src = '/static/disc_inf/' + key + '.svg';
+                img.className = 'disc-icon state-none';
+            }
+            renderDisciplinas();
+        }
+
+        function getSelectedDisciplinas() {
+            return Object.entries(discStates)
+                .filter(function(e) { return e[1] !== 'none'; })
+                .map(function(e) { return {name: e[0], level: e[1]}; });
+        }
+
+        function renderDisciplinas() {
+            const cartaImg = getCartaImg();
+            const imagenUrl = originalRecorteUrl;
+            const valor = nombreInput.value.trim();
+            const clan = clanSelect.value;
+            const senda = sendaSelect.value;
+            const disciplinas = getSelectedDisciplinas();
+            if (!imagenUrl || imagenUrl.includes('undefined') || imagenUrl === '') return;
+            const requestId = ++lastRequestId;
+            fetch('/srv-textos/render-clan/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
+                },
+                body: JSON.stringify({ clan: clan, nombre: valor, senda: senda, disciplinas: disciplinas, habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (requestId === lastRequestId && data.imagen_url && cartaImg) {
+                    cartaImg.src = data.imagen_url + '?t=' + Date.now();
+                }
+            });
+        }
+        // Guardar la imagen recortada original para restaurar si el nombre queda vacío
+        let originalRecorteUrl = null;
+        document.addEventListener('DOMContentLoaded', function() {
+            const cartaImg = getCartaImg();
+            if (cartaImg) {
+                originalRecorteUrl = cartaImg.getAttribute('src');
+            }
+        });
+
+        // Debounce para evitar peticiones excesivas
+        function debounce(fn, delay) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+
+        // Control solo para evitar sobrescritura por peticiones asíncronas, pero siempre permite actualizar si el nombre cambia
+        let lastRequestId = 0;
+        function renderNombre() {
+            const valor = nombreInput.value.trim();
+            const cartaImg = getCartaImg();
+            const imagenUrl = originalRecorteUrl;
+            const clan = clanSelect.value;
+            const senda = sendaSelect.value;
+            if (!valor) {
+                if (cartaImg && originalRecorteUrl) {
+                    cartaImg.src = originalRecorteUrl;
+                }
+                return;
+            }
+            if (!imagenUrl || imagenUrl.includes('undefined') || imagenUrl === '') {
+                return;
+            }
+            const requestId = ++lastRequestId;
+            fetch('/srv-textos/render-nombre/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
+                },
+                body: JSON.stringify({ nombre: valor, clan: clan, senda: senda, disciplinas: getSelectedDisciplinas(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (requestId === lastRequestId && data.imagen_url && cartaImg) {
+                    cartaImg.src = data.imagen_url + '?t=' + Date.now();
+                }
+            });
+        }
+
+        function renderClan() {
+            const clan = clanSelect.value;
+            const cartaImg = getCartaImg();
+            const imagenUrl = originalRecorteUrl;
+            const valor = nombreInput.value.trim();
+            const senda = sendaSelect.value;
+            if (!clan) {
+                return;
+            }
+            if (!imagenUrl || imagenUrl.includes('undefined') || imagenUrl === '') {
+                return;
+            }
+            const requestId = ++lastRequestId;
+            fetch('/srv-textos/render-clan/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
+                },
+                body: JSON.stringify({ clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (requestId === lastRequestId && data.imagen_url && cartaImg) {
+                    cartaImg.src = data.imagen_url + '?t=' + Date.now();
+                }
+            });
+        }
+
+        // Renderizar solo al presionar Enter en el input de nombre
+        nombreInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                renderNombre();
+            }
+        });
+        clanSelect && clanSelect.addEventListener('change', function() {
+            renderClan();
+        });
+        const criptaSelect = document.getElementById('cripta');
+        criptaSelect && criptaSelect.addEventListener('change', function() {
+            renderHabilidad();
+        });
+        const ilustradorInput = document.getElementById('ilustrador');
+        ilustradorInput && ilustradorInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                renderHabilidad();
+            }
+        });
+
+        // --- SENDA/PATH ---
+        function renderSenda() {
+            const senda = sendaSelect.value;
+            const cartaImg = getCartaImg();
+            const imagenUrl = originalRecorteUrl;
+            const valor = nombreInput.value.trim();
+            const clan = clanSelect.value;
+            if (!senda) {
+                return;
+            }
+            if (!imagenUrl || imagenUrl.includes('undefined') || imagenUrl === '') {
+                return;
+            }
+            const requestId = ++lastRequestId;
+            fetch('/srv-textos/render-clan/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
+                },
+                body: JSON.stringify({ clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (requestId === lastRequestId && data.imagen_url && cartaImg) {
+                    cartaImg.src = data.imagen_url + '?t=' + Date.now();
+                }
+            });
+        }
+        sendaSelect && sendaSelect.addEventListener('change', function() {
+            renderSenda();
+        });
+
+        // --- COSTE ---
+        const costeSelect = document.getElementById('coste');
+        function renderCoste() {
+            const cartaImg = getCartaImg();
+            const imagenUrl = originalRecorteUrl;
+            const valor = nombreInput.value.trim();
+            const clan = clanSelect.value;
+            const senda = sendaSelect.value;
+            const coste = costeSelect.value;
+            if (!imagenUrl || imagenUrl.includes('undefined') || imagenUrl === '') return;
+            const requestId = ++lastRequestId;
+            fetch('/srv-textos/render-clan/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
+                },
+                body: JSON.stringify({ clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: coste, cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (requestId === lastRequestId && data.imagen_url && cartaImg) {
+                    cartaImg.src = data.imagen_url + '?t=' + Date.now();
+                }
+            });
+        }
+        costeSelect && costeSelect.addEventListener('change', function() {
+            renderCoste();
+        });
+
+        // --- HABILIDAD ---
+        const habilidadInput = document.getElementById('habilidad');
+        function renderHabilidad() {
+            const habilidad = habilidadInput.value.trim();
+            const cartaImg = getCartaImg();
+            const imagenUrl = originalRecorteUrl;
+            const valor = nombreInput.value.trim();
+            const clan = clanSelect.value;
+            const senda = sendaSelect.value;
+            const disciplinas = getSelectedDisciplinas();
+            if (!imagenUrl || imagenUrl.includes('undefined') || imagenUrl === '') return;
+            const requestId = ++lastRequestId;
+            fetch('/srv-textos/render-clan/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
+                },
+                body: JSON.stringify({ clan: clan, nombre: valor, senda: senda, disciplinas: disciplinas, habilidad: habilidad, coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (requestId === lastRequestId && data.imagen_url && cartaImg) {
+                    cartaImg.src = data.imagen_url + '?t=' + Date.now();
+                }
+            });
+        }
+        habilidadInput && habilidadInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
+                renderHabilidad();
+            }
+        });
+
+        // --- Slider de opacidad del fondo de habilidad ---
+        const habOpacitySlider = document.getElementById('hab-opacity');
+        const habOpacityVal = document.getElementById('hab-opacity-val');
+        if (habOpacitySlider) {
+            habOpacitySlider.addEventListener('input', function() {
+                habOpacityVal.textContent = Math.round(habOpacitySlider.value / 255 * 100) + '%';
+            });
+            habOpacitySlider.addEventListener('change', function() {
+                renderHabilidad();
+            });
+        }
+
+        // Mostrar símbolo al cargar la página si hay clan seleccionado + construir grid disciplinas
+        document.addEventListener('DOMContentLoaded', function() {
+            buildDiscGrid();
+        });
+
+        // --- Guardar carta ---
+        document.getElementById('guardarCartaBtn').addEventListener('click', function() {
+            const cartaImg = getCartaImg();
+            const feedback = document.getElementById('guardar-feedback');
+            if (!cartaImg || !cartaImg.src || cartaImg.src.includes('undefined')) {
+                feedback.textContent = '⚠️ No hay carta renderizada.';
+                feedback.style.color = 'orange';
+                return;
+            }
+            const renderUrl = cartaImg.src.split('?')[0];
+            if (!renderUrl.includes('/render/')) {
+                feedback.textContent = '⚠️ Renderiza la carta antes de guardar.';
+                feedback.style.color = 'orange';
+                return;
+            }
+            feedback.textContent = 'Guardando…';
+            feedback.style.color = 'gray';
+            fetch('/srv-textos/guardar-carta/', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
+                body: JSON.stringify({ render_url: renderUrl })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    feedback.textContent = '✅ Carta guardada';
+                    feedback.style.color = 'green';
+                } else {
+                    feedback.textContent = '❌ Error: ' + (data.error || 'desconocido');
+                    feedback.style.color = 'red';
+                }
+                setTimeout(() => { feedback.textContent = ''; }, 4000);
+            })
+            .catch(() => {
+                feedback.textContent = '❌ Error de red';
+                feedback.style.color = 'red';
+            });
+        });
+
+        // --- RESTO DEL JS (recorte, cropper, etc) --- 
+        let cropper;
+        const input = document.getElementById('inputImagen');
+        const importarBtn = document.getElementById('importarBtn');
+        const recorteContainer = document.getElementById('recorteContainer');
+        const img = document.getElementById('imagen');
+        const preview = document.getElementById('preview');
+        const recortarBtn = document.getElementById('recortarBtn');
+        importarBtn.addEventListener('click', function() {
+            input.value = '';
+            input.click();
+        });
+        input.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    img.src = evt.target.result;
+                    img.style.display = 'block';
+                    recorteContainer.style.display = 'block';
+                    recortarBtn.style.display = 'inline-block';
+                    if (cropper) cropper.destroy();
+                    cropper = new Cropper(img, {
+                        aspectRatio: 63/88,
+                        viewMode: 1,
+                        // preview: preview, // Eliminar previsualización
+                        autoCropArea: 1,
+                        responsive: true,
+                        background: false,
+                        minContainerWidth: 350,
+                        minContainerHeight: 350,
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        recortarBtn.addEventListener('click', function() {
+            if (cropper) {
+                // Obtener el área seleccionada en tamaño real
+                const cropData = cropper.getData(true);
+                const realWidth = Math.round(cropData.width);
+                const realHeight = Math.round(cropData.height);
+                cropper.getCroppedCanvas({width: realWidth, height: realHeight}).toBlob(function(blob) {
+                    const formData = new FormData();
+                    formData.append('imagen', blob, 'recorte.jpg');
+                    fetch('/recorte/recortar-imagen/', {
+                        method: 'POST',
+                        body: formData
+                    }).then(response => {
+                        if (response.redirected) {
+                            window.location.href = response.url;
+                        }
+                    });
+                });
+            }
+        });
+    </script>
+{% endblock %}

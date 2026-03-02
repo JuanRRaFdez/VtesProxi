@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Entorno virtual
+.venv/
+venv/
+env/
+
+# Django
+*.sqlite3
+*.log
+local_settings.py
+
+# Media generada por usuarios (no subir imágenes personales)
+media/imagenes/
+media/recortes/
+media/render/
+media/cartas/
+
+# Estáticos compilados
+staticfiles/
+static_collected/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
