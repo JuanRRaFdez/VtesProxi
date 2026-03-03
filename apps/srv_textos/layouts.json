@@ -1,10 +1,10 @@
 {
   "_comentario": "Cambia 'active' para elegir qué configuración se usa al renderizar.",
-  "active": "standard_300dpi",
+  "active": "classic",
 
   "layouts": {
 
-    "standard_300dpi": {
+    "classic": {
       "_descripcion": "Carta VTES estándar — 63×88 mm a 300 dpi → 745×1040 px",
 
       "carta": {
@@ -83,6 +83,74 @@
         "color":     "white",
         "bottom":    26,
         "_bottom_nota": "Margen desde el borde inferior de la carta."
+      },
+
+      "libreria": {
+        "_descripcion": "Layout para cartas de librería.",
+
+        "nombre": {
+          "font_path":      "static/fonts/MatrixExtraBold.otf",
+          "font_size":      50,
+          "x":              45,
+          "y":              0.04,
+          "color":          "white",
+          "shadow": {
+            "enabled":  true,
+            "color":    "black",
+            "offsets":  [ [-2, -2], [2, -2], [-2, 2], [2, 2] ]
+          }
+        },
+
+        "clan": {
+          "size": 100,
+          "x":    28,
+          "y":    349
+        },
+
+        "senda": {
+          "size": 100,
+          "x":    28,
+          "y":    349
+        },
+
+        "simbolos": {
+          "size":    67,
+          "x":       42,
+          "y":       148,
+          "spacing": 80
+        },
+
+        "disciplinas": {
+          "size":    67,
+          "x":       42,
+          "bottom":  435,
+          "spacing": 80
+        },
+
+        "habilidad": {
+          "font_size":        33,
+          "x":                170,
+          "y_ratio":          0.66,
+          "box_bottom_ratio": 0.97,
+          "max_width_ratio":  0.72,
+          "line_spacing":     4,
+          "color":            "white",
+          "bg_color":         [0, 0, 0],
+          "bg_padding":       19,
+          "bg_radius":        20
+        },
+
+        "coste": {
+          "size":   120,
+          "left":   17,
+          "bottom": 97
+        },
+
+        "ilustrador": {
+          "font_size": 24,
+          "color":     "white",
+          "bottom":    26
+        }
       }
     }
 

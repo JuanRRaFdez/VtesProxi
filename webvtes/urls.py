@@ -31,9 +31,10 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('login/', auth_views.LoginView.as_view(), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
-    path('protected/', include('apps.usuarios.urls', namespace='usuarios')), # si tienes urls propias
     path('importacion/', include('apps.srv_importacion.urls')),
     path('cripta/', include('apps.cripta.urls')),
+    path('libreria/', include('apps.libreria.urls')),
+    path('mis-cartas/', include('apps.mis_cartas.urls', namespace='mis_cartas')),
     path('recorte/', include('apps.srv_recorte.urls')),
     path('srv-textos/', include('apps.srv_textos.urls')),
 ]

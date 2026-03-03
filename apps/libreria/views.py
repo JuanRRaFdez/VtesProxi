@@ -1,8 +1,6 @@
-from django.shortcuts import redirect, render
-import requests
+from django.shortcuts import render
 from django.conf import settings
 
-# Vista para importar imagen y mostrarla
 
 def importar_imagen(request):
     import os
@@ -12,19 +10,23 @@ def importar_imagen(request):
     if recorte:
         recorte_url = settings.MEDIA_URL + recorte
 
-    # Obtener lista de archivos PNG de clanes
     clan_dir = os.path.join(settings.BASE_DIR, 'static', 'clan_symbols')
     clanes = []
     if os.path.exists(clan_dir):
         clanes = [f for f in os.listdir(clan_dir) if f.endswith('.png')]
         clanes.sort()
 
-    # Obtener lista de archivos PNG de sendas/path
     path_dir = os.path.join(settings.BASE_DIR, 'static', 'path')
     sendas = []
     if os.path.exists(path_dir):
         sendas = [f for f in os.listdir(path_dir) if f.endswith('.png')]
         sendas.sort()
+
+    icons_dir = os.path.join(settings.BASE_DIR, 'static', 'icons')
+    libreria_icons = []
+    if os.path.exists(icons_dir):
+        libreria_icons = [f for f in os.listdir(icons_dir) if f.endswith('.png')]
+        libreria_icons.sort()
 
     layouts_json_path = os.path.join(settings.BASE_DIR, 'apps', 'srv_textos', 'layouts.json')
     layout_options = []
@@ -39,7 +41,8 @@ def importar_imagen(request):
         'imagen_url': recorte_url,
         'clanes': clanes,
         'sendas': sendas,
+        'libreria_icons': libreria_icons,
         'layout_options': layout_options,
         'active_layout': active_layout,
-        'card_type': 'cripta',
+        'card_type': 'libreria',
     })

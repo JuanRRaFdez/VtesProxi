@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'apps.srv_importacion',
     'apps.cripta',
+    'apps.libreria',
+    'apps.mis_cartas',
     'apps.srv_recorte',
     'apps.srv_textos',
 ]

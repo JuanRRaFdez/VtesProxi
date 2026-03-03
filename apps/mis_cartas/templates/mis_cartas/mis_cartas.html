@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Mis cartas — VtesProxi{% endblock %}
+{% block extra_head %}
+<style>
+    .cartas-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 1.2rem;
+    }
+    .carta-card {
+        background: #2a2a2a;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+        transition: transform 0.15s, box-shadow 0.15s;
+        cursor: pointer;
+    }
+    .carta-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+    }
+    .carta-card img {
+        width: 100%;
+        display: block;
+    }
+    .carta-img-wrap {
+        cursor: pointer;
+    }
+    .carta-card .carta-footer {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.75rem;
+        color: #aaa;
+        text-align: right;
+    }
+    #modalOverlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.85);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+    }
+    #modalOverlay.active {
+        display: flex;
+    }
+    #modalImg {
+        max-height: 90vh;
+        max-width: 82vw;
+        border-radius: 8px;
+        box-shadow: 0 0 40px rgba(0,0,0,0.8);
+    }
+    #modalPanel {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.7rem;
+    }
+    #modalActions {
+        position: static;
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+        z-index: 1002;
+    }
+    .modal-icon-btn {
+        width: 44px;
+        height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.9);
+        color: #111;
+        text-decoration: none;
+        font-size: 0.95rem;
+        cursor: pointer;
+        padding: 0;
+        overflow: hidden;
+    }
+    .modal-icon-btn:hover {
+        background: #fff;
+    }
+    .modal-icon-btn img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    #modalClose {
+        position: fixed;
+        top: 1rem;
+        right: 1.5rem;
+        color: white;
+        font-size: 2rem;
+        cursor: pointer;
+        z-index: 1001;
+        line-height: 1;
+    }
+    .empty-msg {
+        color: #888;
+        font-size: 1.1rem;
+        margin-top: 3rem;
+        text-align: center;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<h2 class="text-white mb-4">Mis cartas</h2>
+<form method="get" class="row g-2 mb-3">
+    <div class="col-sm-8 col-md-6 col-lg-4">
+        <input type="text" name="q" value="{{ query }}" class="form-control form-control-sm" placeholder="Buscar por nombre de carta...">
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">Buscar</button>
+    </div>
+    {% if query %}
+    <div class="col-auto">
+        <a href="/mis-cartas/" class="btn btn-outline-light btn-sm">Limpiar</a>
+    </div>
+    {% endif %}
+</form>
+{% if cartas %}
+<div class="cartas-grid">
+    {% for carta in cartas %}
+    <div class="carta-card">
+        <div class="carta-img-wrap" onclick="openModal('{{ carta.url }}', '{{ carta.nombre|escapejs }}')">
+            <img src="{{ carta.url }}" alt="Carta" loading="lazy">
+        </div>
+        <div class="carta-footer">{{ carta.fecha }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if page_obj and page_obj.paginator.num_pages > 1 %}
+<nav class="mt-3" aria-label="Paginación cartas">
+    <ul class="pagination pagination-sm mb-0">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if query %}q={{ query|urlencode }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+        {% endif %}
+
+        <li class="page-item disabled">
+            <span class="page-link">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        </li>
+
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?{% if query %}q={{ query|urlencode }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+            </li>
+        {% else %}
+            <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% else %}
+    {% if query %}
+    <div class="empty-msg">No hay cartas que coincidan con "{{ query }}".</div>
+    {% else %}
+    <div class="empty-msg">Aún no has guardado ninguna carta.<br>
+        <a href="/cripta/importar-imagen/" class="btn btn-primary btn-sm mt-3">Crear mi primera carta</a>
+    </div>
+    {% endif %}
+{% endif %}
+
+<div id="modalOverlay" onclick="closeModal()">
+    <span id="modalClose" onclick="closeModal()">&times;</span>
+    <div id="modalPanel" onclick="event.stopPropagation()">
+        <div id="modalActions">
+            <a id="modalDownloadBtn" class="modal-icon-btn" href="#" title="Descargar">
+                <img src="{% static 'images/descarga.png' %}" alt="Descargar">
+            </a>
+            <form id="modalDeleteForm" method="post" action="#" onsubmit="return confirm('¿Borrar esta carta?');" style="margin:0;">
+                {% csrf_token %}
+                {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
+                {% if page_obj %}<input type="hidden" name="page" value="{{ page_obj.number }}">{% endif %}
+                <button type="submit" id="modalDeleteBtn" class="modal-icon-btn" title="Borrar">
+                    <img src="{% static 'images/borrar.png' %}" alt="Borrar">
+                </button>
+            </form>
+        </div>
+        <img id="modalImg" src="" alt="">
+    </div>
+</div>
+
+<script>
+const downloadUrlPattern = "{% url 'mis_cartas:descargar_carta' '__FILENAME__' %}";
+const deleteUrlPattern = "{% url 'mis_cartas:borrar_carta' '__FILENAME__' %}";
+
+function openModal(url, filename) {
+    document.getElementById('modalImg').src = url;
+    const safeName = encodeURIComponent(filename || '');
+    document.getElementById('modalDownloadBtn').href = downloadUrlPattern.replace('__FILENAME__', safeName);
+    document.getElementById('modalDeleteForm').action = deleteUrlPattern.replace('__FILENAME__', safeName);
+    document.getElementById('modalOverlay').classList.add('active');
+}
+function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('active');
+    document.getElementById('modalImg').src = '';
+    document.getElementById('modalDownloadBtn').href = '#';
+    document.getElementById('modalDeleteForm').action = '#';
+}
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeModal();
+});
+</script>
+{% endblock %}

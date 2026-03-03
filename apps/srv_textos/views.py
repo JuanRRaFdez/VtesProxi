@@ -4,20 +4,32 @@ from django.conf import settings
 import os
 import json
 import shutil
+import re
 from PIL import Image, ImageDraw, ImageFont
 from django.utils.crypto import get_random_string
 
 
-def _load_layout():
-    """Carga el layout activo desde layouts.json."""
+def _load_layout(layout_name=None):
+    """Carga un layout concreto (si se indica) o el activo desde layouts.json."""
     json_path = os.path.join(os.path.dirname(__file__), 'layouts.json')
     with open(json_path, encoding='utf-8') as f:
         data = json.load(f)
-    active = data['active']
-    layout = data['layouts'].get(active)
+    active = data.get('active')
+    selected = (layout_name or '').strip() or active
+    layout = data['layouts'].get(selected)
     if layout is None:
-        raise KeyError(f"Layout '{active}' no encontrado en layouts.json")
+        raise KeyError(f"Layout '{selected}' no encontrado en layouts.json")
     return layout
+
+
+def _safe_card_filename_base(nombre):
+    base = (nombre or '').strip()
+    if not base:
+        return ''
+    base = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', base)
+    base = re.sub(r'\s+', ' ', base).strip().strip('.')
+    base = base.lower()
+    return base
 
 
 # --- Helper: abre un símbolo (PNG o SVG) y lo redimensiona ---
@@ -58,9 +70,9 @@ def _parse_habilidad(text):
     """
     Reglas de formato:
     1. Todo hasta los dos puntos ':' → bold
-    2. Después de ':' hasta el primer '.' (fuera de paréntesis) → normal
-       - Texto entre paréntesis '()' → italic
-    3. Después de ese '.' → bold
+    2. Después de ':' hasta el primer '+' precedido por '.' → normal
+         - Texto entre paréntesis '()' → italic
+    3. Desde ese '+' en adelante → bold
     """
     segments = []
     if not text:
@@ -78,21 +90,21 @@ def _parse_habilidad(text):
     if not rest:
         return segments
 
-    # Encontrar el primer '.' fuera de paréntesis
-    dot_idx = None
-    paren_depth = 0
+    # Encontrar el primer '+' que venga precedido por '.' (ignorando espacios)
+    plus_idx = None
     for i, ch in enumerate(rest):
-        if ch == '(':
-            paren_depth += 1
-        elif ch == ')':
-            paren_depth = max(0, paren_depth - 1)
-        elif ch == '.' and paren_depth == 0:
-            dot_idx = i
+        if ch != '+':
+            continue
+        j = i - 1
+        while j >= 0 and rest[j].isspace():
+            j -= 1
+        if j >= 0 and rest[j] == '.':
+            plus_idx = i
             break
 
-    if dot_idx is not None:
-        normal_section = rest[:dot_idx + 1]
-        bold_tail = rest[dot_idx + 1:]
+    if plus_idx is not None:
+        normal_section = rest[:plus_idx]
+        bold_tail = rest[plus_idx:]
     else:
         normal_section = rest
         bold_tail = ''
@@ -127,6 +139,212 @@ def _parse_normal_with_parens(text, segments):
         i = paren_end + 1
 
 
+def _parse_libreria_habilidad(text):
+    """
+    Librería:
+    - Texto entre ** ** -> bold
+    - Resto -> normal
+    """
+    if not text:
+        return []
+
+    segments = []
+    idx = 0
+    is_bold = False
+    while idx < len(text):
+        marker = text.find('**', idx)
+        if marker == -1:
+            chunk = text[idx:]
+            if chunk:
+                segments.append({'text': chunk, 'style': 'bold' if is_bold else 'normal'})
+            break
+
+        chunk = text[idx:marker]
+        if chunk:
+            segments.append({'text': chunk, 'style': 'bold' if is_bold else 'normal'})
+        is_bold = not is_bold
+        idx = marker + 2
+
+    return segments
+
+
+def _split_parentheses_italic(text):
+    """Divide un texto en fragmentos normal/cursiva según paréntesis."""
+    spans = []
+    i = 0
+    while i < len(text):
+        paren_start = text.find('(', i)
+        if paren_start == -1:
+            if i < len(text):
+                spans.append({'text': text[i:], 'italic': False})
+            break
+
+        if paren_start > i:
+            spans.append({'text': text[i:paren_start], 'italic': False})
+
+        paren_end = text.find(')', paren_start)
+        if paren_end == -1:
+            spans.append({'text': text[paren_start:], 'italic': True})
+            break
+
+        spans.append({'text': text[paren_start:paren_end + 1], 'italic': True})
+        i = paren_end + 1
+
+    return spans
+
+
+def _discipline_ref_to_code(label):
+    raw = (label or '').strip()
+    low = raw.lower()
+    is_superior = False
+    if low.startswith('superior '):
+        is_superior = True
+        raw = raw[9:].strip()
+        low = raw.lower()
+
+    aliases = {
+        'abombwe': 'abo',
+        'animalism': 'ani',
+        'auspex': 'aus',
+        'celerity': 'cel',
+        'chimerstry': 'chi',
+        'daimoinon': 'dai',
+        'defense': 'def',
+        'dementation': 'dem',
+        'dominate': 'dom',
+        'flight': 'flight',
+        'fortitude': 'for',
+        'innocence': 'inn',
+        'judgment': 'jus',
+        'maleficia': 'mal',
+        'martyrdom': 'mar',
+        'melpominee': 'mel',
+        'mytherceria': 'myt',
+        'necromancy': 'nec',
+        'obeah': 'obe',
+        'obfuscate': 'obf',
+        'oblivion': 'obl',
+        'obtenebration': 'obt',
+        'potence': 'pot',
+        'presence': 'pre',
+        'protean': 'pro',
+        'quietus': 'qui',
+        'redemption': 'red',
+        'sanguinus': 'san',
+        'serpentis': 'ser',
+        'spiritus': 'spi',
+        'striga': 'str',
+        'temporis': 'tem',
+        'thanatosis': 'tha',
+        'thaumaturgy': 'thn',
+        'blood sorcery': 'thn',
+        'valeren': 'val',
+        'vengeance': 'ven',
+        'vicissitude': 'vic',
+        'vision': 'vin',
+        'visceratika': 'vis',
+    }
+
+    code = aliases.get(low)
+    return code, is_superior
+
+
+def _discipline_symbol_path(code, is_superior):
+    folder = 'disc_sup' if is_superior else 'disc_inf'
+    base = os.path.join(settings.BASE_DIR, 'static', folder, code)
+    png_path = base + '.png'
+    if os.path.exists(png_path):
+        return png_path
+    svg_path = base + '.svg'
+    if os.path.exists(svg_path):
+        return svg_path
+    return None
+
+
+def _special_symbol_path(symbol):
+    if symbol == 'Ⓓ':
+        candidates = [
+            os.path.join(settings.BASE_DIR, 'static', 'icons', 'directed.png'),
+            os.path.join(settings.BASE_DIR, 'static', 'icons', 'directed.svg'),
+            os.path.join(settings.BASE_DIR, 'static', 'icons', 'direcd.png'),
+            os.path.join(settings.BASE_DIR, 'static', 'icons', 'direcd.svg'),
+        ]
+        for icon_path in candidates:
+            if os.path.exists(icon_path):
+                return icon_path
+    return None
+
+
+def _segment_to_tokens_libreria(segments, font_size):
+    font_bold, font_normal = _load_hab_fonts(font_size)
+    tokens = []
+
+    for seg in segments:
+        style = seg['style']
+        font = font_bold if style == 'bold' else font_normal
+        parts = re.split(r'(\[[^\]]+\])', seg['text'])
+
+        for part in parts:
+            if not part:
+                continue
+
+            if part.startswith('[') and part.endswith(']'):
+                code, is_sup = _discipline_ref_to_code(part[1:-1])
+                if code:
+                    symbol_size = max(20, int(font_size * 1.05))
+                    symbol_path = _discipline_symbol_path(code, is_sup)
+                    if symbol_path:
+                        tokens.append({
+                            'type': 'symbol',
+                            'path': symbol_path,
+                            'size': symbol_size,
+                            'gap': max(4, int(font_size * 0.18))
+                        })
+                        continue
+
+            lines = part.split('\n')
+            for li, line in enumerate(lines):
+                if line:
+                    spans = _split_parentheses_italic(line)
+                    for span in spans:
+                        normalized = span['text'].replace('Ⓓ', ' Ⓓ ')
+                        if span['italic']:
+                            if normalized:
+                                tokens.append({
+                                    'type': 'text',
+                                    'text': normalized,
+                                    'font': font,
+                                    'style': 'italic',
+                                })
+                        else:
+                            words = normalized.split(' ')
+                            for wi, word in enumerate(words):
+                                if wi > 0:
+                                    word = ' ' + word
+                                if word:
+                                    raw_word = word.strip()
+                                    icon_path = _special_symbol_path(raw_word)
+                                    if icon_path:
+                                        symbol_size = max(20, int(font_size * 1.05))
+                                        tokens.append({
+                                            'type': 'symbol',
+                                            'path': icon_path,
+                                            'size': symbol_size,
+                                            'gap': max(4, int(font_size * 0.18))
+                                        })
+                                        continue
+                                    tokens.append({
+                                        'type': 'text',
+                                        'text': word,
+                                        'font': font,
+                                        'style': style,
+                                    })
+                if li < len(lines) - 1:
+                    tokens.append({'type': 'newline'})
+
+    return tokens
+
+
 # --- Helper: renderiza texto con word-wrap y múltiples estilos ---
 def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_opacity=180,
                            bg_padding=10, bg_radius=12, line_spacing=3, bg_color=(0, 0, 0),
@@ -142,26 +360,48 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     for seg in segments:
         style = seg['style']
         font = font_bold if style == 'bold' else font_normal
-        parts = seg['text'].split(' ')
-        for idx, part in enumerate(parts):
-            if idx > 0:
-                part = ' ' + part
-            if part:
-                words.append({'text': part, 'style': style, 'font': font})
+        normalized = seg['text'].replace('Ⓓ', ' Ⓓ ')
+        if style == 'italic':
+            if normalized:
+                words.append({'type': 'text', 'text': normalized, 'style': style, 'font': font})
+        else:
+            parts = normalized.split(' ')
+            for idx, part in enumerate(parts):
+                if idx > 0:
+                    part = ' ' + part
+                if part:
+                    raw_part = part.strip()
+                    icon_path = _special_symbol_path(raw_part)
+                    if icon_path:
+                        words.append({
+                            'type': 'symbol',
+                            'path': icon_path,
+                            'size': max(20, int(font_size * 1.05)),
+                            'gap': max(4, int(font_size * 0.18)),
+                            'style': style,
+                            'font': font,
+                        })
+                    else:
+                        words.append({'type': 'text', 'text': part, 'style': style, 'font': font})
 
     line_height = font_size + line_spacing
     cur_x = x
     cur_y = y
     max_right = x
     for word_info in words:
-        w_text = word_info['text']
-        w_font = word_info['font']
-        bbox = w_font.getbbox(w_text)
-        w_width = bbox[2] - bbox[0]
+        if word_info.get('type') == 'symbol':
+            w_width = word_info['size'] + word_info['gap']
+            w_text = None
+            w_font = word_info['font']
+        else:
+            w_text = word_info['text']
+            w_font = word_info['font']
+            bbox = w_font.getbbox(w_text)
+            w_width = bbox[2] - bbox[0]
         if cur_x + w_width > x + max_width - bg_padding and cur_x > x:
             cur_x = x
             cur_y += line_height
-            if w_text.startswith(' '):
+            if w_text and w_text.startswith(' '):
                 w_text = w_text.lstrip(' ')
                 bbox = w_font.getbbox(w_text)
                 w_width = bbox[2] - bbox[0]
@@ -197,69 +437,114 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     current_line = []
     cur_x = x
     for word_info in words:
-        w_text = word_info['text']
         w_font = word_info['font']
         w_style = word_info['style']
-        bbox = w_font.getbbox(w_text)
-        w_width = bbox[2] - bbox[0]
+        if word_info.get('type') == 'symbol':
+            w_text = None
+            w_width = word_info['size'] + word_info['gap']
+        else:
+            w_text = word_info['text']
+            bbox = w_font.getbbox(w_text)
+            w_width = bbox[2] - bbox[0]
         if cur_x + w_width > x + text_width and cur_x > x:
             lines.append(current_line)
             current_line = []
             cur_x = x
-            if w_text.startswith(' '):
+            if w_text and w_text.startswith(' '):
                 w_text = w_text.lstrip(' ')
                 bbox = w_font.getbbox(w_text)
                 w_width = bbox[2] - bbox[0]
-        current_line.append({'text': w_text, 'style': w_style, 'font': w_font})
+        if word_info.get('type') == 'symbol':
+            current_line.append({
+                'type': 'symbol',
+                'path': word_info['path'],
+                'size': word_info['size'],
+                'gap': word_info['gap'],
+                'style': w_style,
+                'font': w_font,
+            })
+        else:
+            current_line.append({'type': 'text', 'text': w_text, 'style': w_style, 'font': w_font})
         cur_x += w_width
     if current_line:
         lines.append(current_line)
 
-    # --- Tercer paso: dibujar líneas con justificado ---
+    # --- Tercer paso: dibujar líneas centradas (sin justificado a extremos) ---
     draw = ImageDraw.Draw(image)
-    cur_y = y - int(pad * 1.5)
-    for line_idx, line in enumerate(lines):
-        is_last_line = (line_idx == len(lines) - 1)
-        # Calcular ancho de cada palabra (sin espacio inicial)
-        stripped_words = [winfo['text'].lstrip(' ') for winfo in line]
+    content_height = max(1, len(lines)) * line_height
+    if box_height is not None:
+        inner_top = ry + max(0, int(pad * 0.5))
+        inner_height = max(1, rh - max(1, pad))
+        cur_y = inner_top + max(0, (inner_height - content_height) // 2)
+    else:
+        cur_y = y - int(pad * 1.5)
+    symbol_cache = {}
+    icon_vertical_nudge = max(2, int(font_size * 0.16))
+    for line in lines:
+        # Calcular ancho de cada token
+        stripped_words = []
         word_widths = []
-        for i, winfo in enumerate(line):
-            bbox = winfo['font'].getbbox(stripped_words[i])
-            word_widths.append(bbox[2] - bbox[0])
-        total_word_width = sum(word_widths)
+        token_is_symbol = []
+        for winfo in line:
+            if winfo.get('type') == 'symbol':
+                stripped_words.append('')
+                word_widths.append(winfo['size'] + winfo['gap'])
+                token_is_symbol.append(True)
+            else:
+                stripped = winfo['text'].lstrip(' ')
+                stripped_words.append(stripped)
+                bbox = winfo['font'].getbbox(stripped)
+                word_widths.append(bbox[2] - bbox[0])
+                token_is_symbol.append(False)
+
+        line_width = sum(word_widths)
         num_words = len(line)
-        if is_last_line or num_words <= 1:
-            # Última línea: alinear a la izquierda con espacio normal
-            cur_x = x
-            for i, winfo in enumerate(line):
+        if num_words > 1:
+            for i, winfo in enumerate(line[:-1]):
+                if not token_is_symbol[i]:
+                    sp = winfo['font'].getbbox(' ')
+                    line_width += sp[2] - sp[0]
+                else:
+                    line_width += max(2, int(font_size * 0.1))
+
+        cur_x = x + max(0, (text_width - line_width) // 2)
+        for i, winfo in enumerate(line):
+            if token_is_symbol[i]:
+                cache_key = (winfo['path'], winfo['size'])
+                icon = symbol_cache.get(cache_key)
+                if icon is None:
+                    icon = _load_symbol(winfo['path'], winfo['size'])
+                    symbol_cache[cache_key] = icon
+                image.alpha_composite(icon, (int(cur_x), int(cur_y + max(0, (line_height - winfo['size']) // 2) - icon_vertical_nudge)))
+            else:
                 t = stripped_words[i]
                 if winfo['style'] == 'italic':
                     _draw_italic(image, int(cur_x), cur_y, t, winfo['font'], color, font_size)
                 else:
                     draw.text((int(cur_x), cur_y), t, font=winfo['font'], fill=color)
-                cur_x += word_widths[i]
-                if i < num_words - 1:
+            cur_x += word_widths[i]
+            if i < num_words - 1:
+                if not token_is_symbol[i]:
                     sp = winfo['font'].getbbox(' ')
                     cur_x += sp[2] - sp[0]
-        else:
-            # Justificado: distribuir espacio extra entre palabras
-            gaps = num_words - 1
-            space_per_gap = (text_width - total_word_width) / gaps
-            cur_x = x
-            for i, winfo in enumerate(line):
-                t = stripped_words[i]
-                if winfo['style'] == 'italic':
-                    _draw_italic(image, int(cur_x), cur_y, t, winfo['font'], color, font_size)
                 else:
-                    draw.text((int(cur_x), cur_y), t, font=winfo['font'], fill=color)
-                cur_x += word_widths[i]
-                if i < num_words - 1:
-                    cur_x += space_per_gap
+                    cur_x += max(2, int(font_size * 0.1))
         cur_y += line_height
 
 
 def _draw_italic(image, x, y, text, font, color, font_size):
     """Simula texto en cursiva usando transformación de cizalla (shear)."""
+    if not text:
+        return
+
+    leading_spaces = len(text) - len(text.lstrip(' '))
+    if leading_spaces > 0:
+        space_bbox = font.getbbox(' ')
+        x += (space_bbox[2] - space_bbox[0]) * leading_spaces
+        text = text.lstrip(' ')
+        if not text:
+            return
+
     bbox = font.getbbox(text)
     w = bbox[2] - bbox[0] + 10
     h = bbox[3] - bbox[1] + 10
@@ -271,14 +556,125 @@ def _draw_italic(image, x, y, text, font, color, font_size):
     # Aplicar transformación affine para cizalla
     tmp = tmp.transform(
         tmp.size, Image.AFFINE,
-        (1, -shear, shear * h / 2, 0, 1, 0),
+        (1, shear, -shear * h / 2, 0, 1, 0),
         resample=Image.BICUBIC
     )
     image.alpha_composite(tmp, (x, y))
 
 
+def _render_habilidad_text_libreria(image, text, x, y, max_width, font_size, color, bg_opacity=180,
+                                    bg_padding=10, bg_radius=12, line_spacing=3, bg_color=(0, 0, 0),
+                                    box_height=None):
+    segments = _parse_libreria_habilidad(text)
+    if not segments:
+        return
+
+    tokens = _segment_to_tokens_libreria(segments, font_size)
+    if not tokens:
+        return
+
+    line_height = int(font_size * 1.15) + line_spacing
+    text_width_limit = max_width - bg_padding
+
+    lines = []
+    current_line = []
+    current_width = 0
+
+    for tok in tokens:
+        if tok['type'] == 'newline':
+            lines.append(current_line)
+            current_line = []
+            current_width = 0
+            continue
+
+        if tok['type'] == 'text':
+            bbox = tok['font'].getbbox(tok['text'])
+            tok_w = bbox[2] - bbox[0]
+            if tok.get('style') == 'italic':
+                tok_w += max(2, int(font_size * 0.08))
+        else:
+            tok_w = tok['size'] + tok['gap']
+
+        if current_width + tok_w > text_width_limit and current_line:
+            lines.append(current_line)
+            current_line = []
+            current_width = 0
+            if tok['type'] == 'text':
+                tok = dict(tok)
+                tok['text'] = tok['text'].lstrip(' ')
+                bbox = tok['font'].getbbox(tok['text'])
+                tok_w = bbox[2] - bbox[0]
+
+        current_line.append(tok)
+        current_width += tok_w
+
+    if current_line:
+        lines.append(current_line)
+
+    pad = bg_padding
+    rx, ry = x - pad, y - pad * 2
+    rw = max_width + pad
+    if box_height is not None:
+        rh = box_height
+    else:
+        rh = max(line_height, len(lines) * line_height + pad)
+
+    bg_opacity = max(0, min(255, int(bg_opacity)))
+    overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+    overlay_draw = ImageDraw.Draw(overlay)
+    overlay_draw.rounded_rectangle(
+        [rx, ry, rx + rw, ry + rh],
+        radius=bg_radius,
+        fill=(*bg_color, bg_opacity)
+    )
+    image.alpha_composite(overlay)
+
+    draw = ImageDraw.Draw(image)
+    content_height = max(1, len(lines)) * line_height
+    if box_height is not None:
+        inner_top = ry + max(0, int(pad * 0.5))
+        inner_height = max(1, rh - max(1, pad))
+        cy = inner_top + max(0, (inner_height - content_height) // 2)
+    else:
+        cy = y - int(pad * 1.5)
+    symbol_cache = {}
+    icon_vertical_nudge = max(2, int(font_size * 0.16))
+    for line in lines:
+        line_width = 0
+        for tok in line:
+            if tok['type'] == 'text':
+                bbox = tok['font'].getbbox(tok['text'])
+                tok_w = bbox[2] - bbox[0]
+                if tok.get('style') == 'italic':
+                    tok_w += max(2, int(font_size * 0.08))
+            else:
+                tok_w = tok['size'] + tok['gap']
+            line_width += tok_w
+
+        cx = x + max(0, (text_width_limit - line_width) // 2)
+        for tok in line:
+            if tok['type'] == 'text':
+                if tok.get('style') == 'italic':
+                    _draw_italic(image, int(cx), cy, tok['text'], tok['font'], color, font_size)
+                else:
+                    draw.text((int(cx), cy), tok['text'], font=tok['font'], fill=color)
+                bbox = tok['font'].getbbox(tok['text'])
+                cx += bbox[2] - bbox[0]
+                if tok.get('style') == 'italic':
+                    cx += max(2, int(font_size * 0.08))
+            else:
+                cache_key = (tok['path'], tok['size'])
+                icon = symbol_cache.get(cache_key)
+                if icon is None:
+                    icon = _load_symbol(tok['path'], tok['size'])
+                    symbol_cache[cache_key] = icon
+                image.alpha_composite(icon, (int(cx), int(cy + max(0, (line_height - tok['size']) // 2) - icon_vertical_nudge)))
+                cx += tok['size'] + tok['gap']
+        cy += line_height
+
+
 # --- Helper principal: renderiza TODOS los elementos sobre la imagen base ---
-def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, habilidad='', coste='', cripta='', ilustrador='', hab_opacity=180):
+def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, simbolos=None, habilidad='', coste='', cripta='', ilustrador='', hab_opacity=180, hab_font_size=None, card_type='cripta', layout_name=None):
     """
     Renderiza todos los elementos de la carta sobre la imagen base.
     Cada elemento tiene posición fija e independiente:
@@ -292,16 +688,22 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, ha
     if not os.path.exists(imagen_abspath):
         return None, 'Imagen no encontrada'
 
-    lay = _load_layout()
+    lay = _load_layout(layout_name)
     lc  = lay['carta']
-    ln  = lay['nombre']
-    lcl = lay['clan']
-    ls  = lay['senda']
-    ld  = lay['disciplinas']
-    lh  = lay['habilidad']
-    lco = lay['coste']
-    lcr = lay['cripta']
-    lil = lay['ilustrador']
+    card_type = (card_type or 'cripta').strip().lower()
+    if card_type not in ('cripta', 'libreria'):
+        card_type = 'cripta'
+
+    layout_scope = lay.get('libreria', {}) if card_type == 'libreria' else lay
+    ln  = layout_scope.get('nombre', lay['nombre'])
+    lcl = layout_scope.get('clan', lay['clan'])
+    ls  = layout_scope.get('senda')
+    ld  = layout_scope.get('disciplinas', lay['disciplinas'])
+    lsi = layout_scope.get('simbolos') if card_type == 'libreria' else None
+    lh  = layout_scope.get('habilidad', lay['habilidad'])
+    lco = layout_scope.get('coste', lay['coste'])
+    lcr = lay.get('cripta') if card_type == 'cripta' else None
+    lil = layout_scope.get('ilustrador', lay.get('ilustrador'))
 
     card_w = lc['width']
     card_h = lc['height']
@@ -314,16 +716,27 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, ha
     clan_x       = lcl['x']
     clan_y       = lcl['y']
 
-    senda_size   = ls['size']
-    senda_x      = ls['x']
-    senda_y      = ls['y']
+    if ls:
+        senda_size = ls['size']
+        senda_x = ls['x']
+        senda_y = ls['y']
+
+    if lsi:
+        simbolos_size = lsi['size']
+        simbolos_x = lsi['x']
+        simbolos_y = lsi['y']
+        simbolos_spacing = lsi['spacing']
 
     disc_size    = ld['size']
     disc_x       = ld['x']
     disc_bottom  = ld['bottom']
     disc_spacing = ld['spacing']
 
-    hab_font_size = lh['font_size']
+    default_hab_font_size = int(lh['font_size'])
+    if hab_font_size is None:
+        hab_font_size = default_hab_font_size
+    else:
+        hab_font_size = max(20, min(int(hab_font_size), 80))
     hab_x         = lh['x']
     hab_y         = int(card_h * lh['y_ratio'])
     hab_max_w     = int(card_w * lh['max_width_ratio'])
@@ -333,14 +746,17 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, ha
     hab_box_h     = int(card_h * lh['box_bottom_ratio']) - hab_y if 'box_bottom_ratio' in lh else None
 
     coste_size   = lco['size']
-    coste_right  = lco['right']
     coste_bottom = lco['bottom']
+    coste_right  = lco.get('right')
+    coste_left   = lco.get('left')
 
-    cripta_font_size = lcr['font_size']
-    cripta_y_gap     = lcr['y_gap']
+    if lcr:
+        cripta_font_size = lcr['font_size']
+        cripta_y_gap = lcr['y_gap']
 
-    il_font_size = lil['font_size']
-    il_bottom    = lil['bottom']
+    if lil:
+        il_font_size = lil['font_size']
+        il_bottom = lil['bottom']
 
     # 1) Nombre (independiente de los símbolos)
     if nombre:
@@ -373,7 +789,7 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, ha
             print(f"[DEBUG] Archivo de clan no encontrado: {clan_symbol_path}")
 
     # 3) Símbolo de senda/path (posición fija, independiente del nombre)
-    if senda:
+    if senda and ls:
         senda_symbol_path = os.path.join(settings.BASE_DIR, 'static/path', senda)
         if os.path.exists(senda_symbol_path):
             try:
@@ -384,7 +800,33 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, ha
         else:
             print(f"[DEBUG] Archivo de senda no encontrado: {senda_symbol_path}")
 
-    # 4) Disciplinas (columna vertical: disc_sup abajo, disc_inf encima)
+    # 4) Símbolos de librería (columna vertical de arriba a abajo)
+    if card_type == 'libreria' and simbolos and lsi:
+        y_top = simbolos_y
+        for sym in simbolos:
+            sym_name = os.path.basename(str(sym)).strip()
+            if not sym_name:
+                continue
+            if sym_name.lower().endswith('.png') or sym_name.lower().endswith('.svg'):
+                sym_base = sym_name.rsplit('.', 1)[0]
+            else:
+                sym_base = sym_name
+
+            sym_path = os.path.join(settings.BASE_DIR, 'static/icons', sym_base + '.png')
+            if not os.path.exists(sym_path):
+                sym_path = os.path.join(settings.BASE_DIR, 'static/icons', sym_base + '.svg')
+
+            if os.path.exists(sym_path):
+                try:
+                    sym_img = _load_symbol(sym_path, simbolos_size)
+                    image.alpha_composite(sym_img, (simbolos_x, y_top))
+                    y_top += simbolos_spacing
+                except Exception as e:
+                    print(f'Error renderizando símbolo de librería {sym_base}: {e}')
+            else:
+                print(f"[DEBUG] Archivo de símbolo de librería no encontrado: {sym_base}")
+
+    # 5) Disciplinas (columna vertical: disc_sup abajo, disc_inf encima)
     if disciplinas:
         disc_sup_images = []
         disc_inf_images = []
@@ -423,8 +865,8 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, ha
     # Base Y del recuadro de habilidad (se computa siempre)
     pad = hab_padding
 
-    # 5) Número de cripta (sobre el recuadro, pegado a la izquierda)
-    if cripta:
+    # 6) Número de cripta (sobre el recuadro, pegado a la izquierda)
+    if card_type == 'cripta' and cripta and lcr:
         try:
             font_bold, _ = _load_hab_fonts(cripta_font_size)
             box_top = hab_y - pad * 2
@@ -435,18 +877,28 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, ha
         except Exception as e:
             print(f'Error renderizando cripta: {e}')
 
-    # 6) Habilidad (cuadro de texto con formato mixto)
+    # 7) Habilidad (cuadro de texto con formato mixto)
     if habilidad:
         try:
-            _render_habilidad_text(image, habilidad, hab_x, hab_y, hab_max_w, hab_font_size, lh['color'],
-                                   bg_opacity=hab_opacity, bg_padding=hab_padding,
-                                   bg_radius=hab_radius, line_spacing=hab_line_sp,
-                                   bg_color=tuple(lh['bg_color']), box_height=hab_box_h)
+            if card_type == 'libreria':
+                _render_habilidad_text_libreria(
+                    image, habilidad, hab_x, hab_y, hab_max_w, hab_font_size, lh['color'],
+                    bg_opacity=hab_opacity, bg_padding=hab_padding,
+                    bg_radius=hab_radius, line_spacing=hab_line_sp,
+                    bg_color=tuple(lh['bg_color']), box_height=hab_box_h
+                )
+            else:
+                _render_habilidad_text(
+                    image, habilidad, hab_x, hab_y, hab_max_w, hab_font_size, lh['color'],
+                    bg_opacity=hab_opacity, bg_padding=hab_padding,
+                    bg_radius=hab_radius, line_spacing=hab_line_sp,
+                    bg_color=tuple(lh['bg_color']), box_height=hab_box_h
+                )
         except Exception as e:
             print(f'Error renderizando habilidad: {e}')
 
-    # 7) Ilustrador (centrado, pegado a la parte inferior de la carta)
-    if ilustrador:
+    # 8) Ilustrador (centrado, pegado a la parte inferior de la carta)
+    if ilustrador and lil:
         try:
             _, font_normal = _load_hab_fonts(il_font_size)
             il_bbox = font_normal.getbbox(ilustrador)
@@ -459,23 +911,50 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, ha
         except Exception as e:
             print(f'Error renderizando ilustrador: {e}')
 
-    # 8) Coste (símbolo abajo a la derecha)
+    # 9) Coste (símbolo abajo a la derecha)
     print(f'[DEBUG] coste recibido: "{coste}" (type={type(coste).__name__})')
     if coste:
-        coste_file = f'cap{coste}.gif'
-        coste_path = os.path.join(settings.BASE_DIR, 'static/costes', coste_file)
+        coste_path = None
+        if card_type == 'libreria':
+            raw_coste = str(coste).strip().lower()
+            candidates = []
+            if raw_coste.isdigit():
+                candidates.append(f'pool{raw_coste}.png')
+            elif raw_coste in ('x', 'poolx'):
+                candidates.append('poolx.png')
+            elif raw_coste in ('bloodx',):
+                candidates.append('bloodx.png')
+            else:
+                candidates.append(f'{raw_coste}.png')
+
+            for file_name in candidates:
+                probe = os.path.join(settings.BASE_DIR, 'static/costes_lib', file_name)
+                if os.path.exists(probe):
+                    coste_path = probe
+                    break
+        else:
+            coste_file = f'cap{coste}.gif'
+            probe = os.path.join(settings.BASE_DIR, 'static/costes', coste_file)
+            if os.path.exists(probe):
+                coste_path = probe
+
         print(f'[DEBUG] coste_path: {coste_path}, exists: {os.path.exists(coste_path)}')
-        if os.path.exists(coste_path):
+        if coste_path and os.path.exists(coste_path):
             try:
                 coste_img = Image.open(coste_path).convert('RGBA')
                 coste_img = coste_img.resize((coste_size, coste_size), Image.LANCZOS)
-                coste_x = image.width - coste_right - coste_size
+                if coste_left is not None:
+                    coste_x = int(coste_left)
+                elif coste_right is not None:
+                    coste_x = image.width - int(coste_right) - coste_size
+                else:
+                    coste_x = image.width - 40 - coste_size
                 coste_y = image.height - coste_bottom - coste_size
                 image.alpha_composite(coste_img, (coste_x, coste_y))
             except Exception as e:
                 print(f'Error renderizando coste: {e}')
         else:
-            print(f'[DEBUG] Archivo de coste no encontrado: {coste_path}')
+            print(f'[DEBUG] Archivo de coste no encontrado para valor: {coste}')
 
     # Guardar imagen renderizada
     render_dir = os.path.join(settings.MEDIA_ROOT, 'render')
@@ -500,16 +979,20 @@ def render_nombre(request):
         clan = (data.get('clan') or '').strip()
         senda = (data.get('senda') or '').strip()
         disciplinas = data.get('disciplinas') or []
+        simbolos = data.get('simbolos') or []
         habilidad = (data.get('habilidad') or '').strip()
         coste = (data.get('coste') or '').strip()
         cripta = str(data.get('cripta') or '').strip()
         ilustrador = (data.get('ilustrador') or '').strip()
         hab_opacity = int(data.get('hab_opacity', 180))
+        hab_font_size = int(data.get('hab_font_size', 33))
+        card_type = (data.get('card_type') or 'cripta').strip().lower()
+        layout_name = (data.get('layout_name') or '').strip()
         imagen_url = data.get('imagen_url', '')
         if not imagen_url:
             return JsonResponse({'error': 'Faltan datos'}, status=400)
 
-        render_url, error = _render_carta(imagen_url, nombre=nombre, clan=clan, senda=senda, disciplinas=disciplinas, habilidad=habilidad, coste=coste, cripta=cripta, ilustrador=ilustrador, hab_opacity=hab_opacity)
+        render_url, error = _render_carta(imagen_url, nombre=nombre, clan=clan, senda=senda, disciplinas=disciplinas, simbolos=simbolos, habilidad=habilidad, coste=coste, cripta=cripta, ilustrador=ilustrador, hab_opacity=hab_opacity, hab_font_size=hab_font_size, card_type=card_type, layout_name=layout_name)
         if error:
             return JsonResponse({'error': error}, status=404)
         return JsonResponse({'imagen_url': render_url})
@@ -531,16 +1014,20 @@ def render_clan(request):
         nombre = (data.get('nombre') or '').strip()
         senda = (data.get('senda') or '').strip()
         disciplinas = data.get('disciplinas') or []
+        simbolos = data.get('simbolos') or []
         habilidad = (data.get('habilidad') or '').strip()
         coste = (data.get('coste') or '').strip()
         cripta = str(data.get('cripta') or '').strip()
         ilustrador = (data.get('ilustrador') or '').strip()
         hab_opacity = int(data.get('hab_opacity', 180))
+        hab_font_size = int(data.get('hab_font_size', 33))
+        card_type = (data.get('card_type') or 'cripta').strip().lower()
+        layout_name = (data.get('layout_name') or '').strip()
         imagen_url = data.get('imagen_url', '')
         if not imagen_url:
             return JsonResponse({'error': 'Faltan datos'}, status=400)
 
-        render_url, error = _render_carta(imagen_url, nombre=nombre, clan=clan, senda=senda, disciplinas=disciplinas, habilidad=habilidad, coste=coste, cripta=cripta, ilustrador=ilustrador, hab_opacity=hab_opacity)
+        render_url, error = _render_carta(imagen_url, nombre=nombre, clan=clan, senda=senda, disciplinas=disciplinas, simbolos=simbolos, habilidad=habilidad, coste=coste, cripta=cripta, ilustrador=ilustrador, hab_opacity=hab_opacity, hab_font_size=hab_font_size, card_type=card_type, layout_name=layout_name)
         if error:
             return JsonResponse({'error': error}, status=404)
         return JsonResponse({'imagen_url': render_url})
@@ -562,16 +1049,20 @@ def render_texto(request):
         clan = (data.get('clan') or '').strip()
         senda = (data.get('senda') or '').strip()
         disciplinas = data.get('disciplinas') or []
+        simbolos = data.get('simbolos') or []
         habilidad = (data.get('habilidad') or '').strip()
         coste = (data.get('coste') or '').strip()
         cripta = str(data.get('cripta') or '').strip()
         ilustrador = (data.get('ilustrador') or '').strip()
         hab_opacity = int(data.get('hab_opacity', 180))
+        hab_font_size = int(data.get('hab_font_size', 33))
+        card_type = (data.get('card_type') or 'cripta').strip().lower()
+        layout_name = (data.get('layout_name') or '').strip()
         imagen_url = data.get('imagen_url', '')
         if not imagen_url:
             return JsonResponse({'error': 'Faltan datos'}, status=400)
 
-        render_url, error = _render_carta(imagen_url, nombre=nombre, clan=clan, senda=senda, disciplinas=disciplinas, habilidad=habilidad, coste=coste, cripta=cripta, ilustrador=ilustrador, hab_opacity=hab_opacity)
+        render_url, error = _render_carta(imagen_url, nombre=nombre, clan=clan, senda=senda, disciplinas=disciplinas, simbolos=simbolos, habilidad=habilidad, coste=coste, cripta=cripta, ilustrador=ilustrador, hab_opacity=hab_opacity, hab_font_size=hab_font_size, card_type=card_type, layout_name=layout_name)
         if error:
             return JsonResponse({'error': error}, status=404)
         return JsonResponse({'imagen_url': render_url})
@@ -592,8 +1083,13 @@ def guardar_carta(request):
     try:
         data = json.loads(request.body.decode('utf-8'))
         render_url = (data.get('render_url') or '').strip()
+        nombre_carta = (data.get('nombre') or '').strip().lower()
         if not render_url:
             return JsonResponse({'error': 'Falta render_url'}, status=400)
+
+        filename_base = _safe_card_filename_base(nombre_carta)
+        if not filename_base:
+            return JsonResponse({'error': 'Falta nombre de carta'}, status=400)
 
         # Resolver ruta absoluta del render temporal
         # render_url puede venir como URL absoluta (http://...) o relativa (/media/...)
@@ -612,7 +1108,11 @@ def guardar_carta(request):
         dest_dir = os.path.join(settings.MEDIA_ROOT, 'cartas', username)
         os.makedirs(dest_dir, exist_ok=True)
 
-        filename = f'carta_{get_random_string(10)}.png'
+        filename = f'{filename_base}.png'
+        counter = 2
+        while os.path.exists(os.path.join(dest_dir, filename)):
+            filename = f'{filename_base}_{counter}.png'
+            counter += 1
         dest_path = os.path.join(dest_dir, filename)
         shutil.copy2(src_path, dest_path)
 

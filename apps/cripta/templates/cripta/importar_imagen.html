@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% block title %}Importar imagen de cripta{% endblock %}
+{% block title %}{% if card_type == 'libreria' %}Importar imagen de librería{% else %}Importar imagen de cripta{% endif %}{% endblock %}
 {% block extra_head %}
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
     <style>
@@ -20,6 +20,18 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+        }
+        .editor-panel {
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .save-row {
+            position: sticky;
+            bottom: 0;
+            background: #fff;
+            padding-top: 0.35rem;
+            padding-bottom: 0.15rem;
+            z-index: 2;
         }
         .title {
             font-weight: 700;
@@ -109,6 +121,32 @@
             opacity: 0.85;
             transform: scale(1.15);
         }
+        .symbol-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding: 3px 0;
+        }
+        .symbol-icon {
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            border-radius: 4px;
+            padding: 2px;
+            border: 2px solid transparent;
+            transition: all 0.15s ease;
+            box-sizing: border-box;
+            opacity: 0.55;
+        }
+        .symbol-icon.selected {
+            opacity: 1;
+            border-color: #0d6efd;
+            background: rgba(13,110,253,0.12);
+        }
+        .symbol-icon:hover {
+            opacity: 0.9;
+            transform: scale(1.12);
+        }
     </style>
 {% endblock %}
 {% block content %}
@@ -127,12 +165,20 @@
                 {% if imagen_url %}
                     <img src="{{ imagen_url }}" alt="Imagen cripta" class="recorte-img">
                 {% endif %}
+                <div class="mt-2">
+                    <label for="layout-select" class="form-label">Layout</label>
+                    <select class="form-select form-select-sm" id="layout-select" name="layout">
+                        {% for layout_name in layout_options %}
+                            <option value="{{ layout_name }}" {% if layout_name == active_layout %}selected{% endif %}>{{ layout_name|title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
         </div>
         <!-- Columna derecha: Formulario -->
         <div class="col-md-7 col-lg-8">
-            <div class="main-container">
-                <div class="title">Datos de la carta</div>
+            <div class="main-container editor-panel">
+                <div class="title">Datos de la carta {% if card_type == 'libreria' %}de librería{% else %}de cripta{% endif %}</div>
                 <form>
                     {% csrf_token %}
                     <!-- Fila 1: Nombre -->
@@ -161,8 +207,9 @@
                             </select>
                         </div>
                     </div>
-                    <!-- Fila 3: Cripta + Coste -->
+                    <!-- Fila 3: Cripta + Coste + Ilustrador -->
                     <div class="row g-2 mb-2">
+                        {% if card_type != 'libreria' %}
                         <div class="col-4">
                             <label for="cripta" class="form-label">Cripta</label>
                             <select class="form-select form-select-sm" id="cripta" name="cripta">
@@ -178,10 +225,29 @@
                                 <option value="9">9</option>
                             </select>
                         </div>
-                        <div class="col-4">
+                        {% endif %}
+                        <div class="{% if card_type == 'libreria' %}col-6{% else %}col-4{% endif %}">
                             <label for="coste" class="form-label">Coste</label>
                             <select class="form-select form-select-sm" id="coste" name="coste">
                                 <option value="">-</option>
+                                {% if card_type == 'libreria' %}
+                                <optgroup label="Pool">
+                                    <option value="pool1">Pool 1</option>
+                                    <option value="pool2">Pool 2</option>
+                                    <option value="pool3">Pool 3</option>
+                                    <option value="pool4">Pool 4</option>
+                                    <option value="pool5">Pool 5</option>
+                                    <option value="pool6">Pool 6</option>
+                                    <option value="poolx">Pool X</option>
+                                </optgroup>
+                                <optgroup label="Blood">
+                                    <option value="blood1">Blood 1</option>
+                                    <option value="blood2">Blood 2</option>
+                                    <option value="blood3">Blood 3</option>
+                                    <option value="blood4">Blood 4</option>
+                                    <option value="bloodx">Blood X</option>
+                                </optgroup>
+                                {% else %}
                                 <option value="1">1</option>
                                 <option value="2">2</option>
                                 <option value="3">3</option>
@@ -193,14 +259,21 @@
                                 <option value="9">9</option>
                                 <option value="10">10</option>
                                 <option value="11">11</option>
+                                {% endif %}
                             </select>
                         </div>
-                        <div class="col-4">
+                        <div class="{% if card_type == 'libreria' %}col-6{% else %}col-4{% endif %}">
                             <label for="ilustrador" class="form-label">Ilustrador</label>
                             <input type="text" class="form-control form-control-sm" id="ilustrador" name="ilustrador" placeholder="Ilustrador">
                         </div>
                     </div>
                     <!-- Fila 4: Disciplinas -->
+                    {% if card_type == 'libreria' %}
+                    <div class="mb-2">
+                        <label class="form-label">Símbolos</label>
+                        <div id="symbol-grid" class="symbol-grid"></div>
+                    </div>
+                    {% endif %}
                     <div class="mb-2">
                         <label class="form-label">Disciplinas</label>
                         <div id="disc-grid" class="disc-grid"></div>
@@ -210,13 +283,19 @@
                         <label for="habilidad" class="form-label">Habilidad <small class="text-muted">(Ctrl+Enter)</small></label>
                         <textarea class="form-control form-control-sm" id="habilidad" name="habilidad" rows="3" placeholder="Sabbat cardinal: Texto de habilidad (cursiva). +1 bleed."></textarea>
                     </div>
-                    <!-- Fila 6: Transparencia -->
-                    <div class="mb-2">
-                        <label for="hab-opacity" class="form-label mb-0">Transparencia fondo: <span id="hab-opacity-val">70%</span></label>
-                        <input type="range" class="form-range" id="hab-opacity" min="0" max="255" value="180" step="5">
+                    <!-- Fila 6: Transparencia + Tamaño fuente -->
+                    <div class="mb-2 row g-2">
+                        <div class="col-6">
+                            <label for="hab-opacity" class="form-label mb-0">Transparencia fondo: <span id="hab-opacity-val">70%</span></label>
+                            <input type="range" class="form-range" id="hab-opacity" min="0" max="255" value="180" step="5">
+                        </div>
+                        <div class="col-6">
+                            <label for="hab-font-size" class="form-label mb-0">Tamaño fuente: <span id="hab-font-size-val">33px</span></label>
+                            <input type="range" class="form-range" id="hab-font-size" min="20" max="50" value="33" step="1">
+                        </div>
                     </div>
                     <!-- Guardar carta -->
-                    <div class="d-flex align-items-center gap-2 mt-1">
+                    <div class="d-flex align-items-center gap-2 mt-1 save-row">
                         <button type="button" id="guardarCartaBtn" class="btn btn-warning btn-sm">💾 Guardar carta</button>
                         <span id="guardar-feedback" class="small"></span>
                     </div>
@@ -227,14 +306,72 @@
 </div>
 {% endblock %}
 {% block extra_js %}
+    {% if libreria_icons %}
+        {{ libreria_icons|json_script:"libreria-icons-data" }}
+    {% else %}
+        <script id="libreria-icons-data" type="application/json">[]</script>
+    {% endif %}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script>
         // --- NUEVO JS UNIFICADO PARA RENDERIZAR NOMBRE Y CLAN ---
         const clanSelect = document.getElementById('clan-select');
         const sendaSelect = document.getElementById('senda-select');
+        const layoutSelect = document.getElementById('layout-select');
+        const cardType = '{{ card_type|default:"cripta" }}';
         const nombreInput = document.getElementById('nombre');
         function getCartaImg() {
             return document.querySelector('.recorte-img');
+        }
+
+        function getSendaValue() {
+            return (sendaSelect && sendaSelect.value) ? sendaSelect.value : '';
+        }
+
+        function getLayoutValue() {
+            return (layoutSelect && layoutSelect.value) ? layoutSelect.value : '';
+        }
+
+        const LIBRERIA_ICONS = JSON.parse((document.getElementById('libreria-icons-data') || { textContent: '[]' }).textContent || '[]');
+        let selectedSimbolos = [];
+
+        function getSelectedSimbolos() {
+            return selectedSimbolos.slice();
+        }
+
+        function buildSymbolGrid() {
+            if (cardType !== 'libreria') return;
+            const grid = document.getElementById('symbol-grid');
+            if (!grid) return;
+            LIBRERIA_ICONS.forEach(function(fileName) {
+                const baseName = fileName.replace(/\.(png|svg)$/i, '');
+                const img = document.createElement('img');
+                img.src = '/static/icons/' + fileName;
+                img.alt = baseName;
+                img.title = baseName;
+                img.className = 'symbol-icon';
+                img.dataset.symbol = baseName;
+                img.addEventListener('click', function() {
+                    toggleSymbol(baseName, img);
+                });
+                grid.appendChild(img);
+            });
+        }
+
+        function toggleSymbol(symbolName, img) {
+            const idx = selectedSimbolos.indexOf(symbolName);
+            if (idx >= 0) {
+                selectedSimbolos.splice(idx, 1);
+                img.classList.remove('selected');
+            } else {
+                selectedSimbolos.push(symbolName);
+                img.classList.add('selected');
+            }
+            renderSimbolos();
+        }
+
+        function renderSimbolos() {
+            if (cardType !== 'libreria') return;
+            renderDisciplinas();
         }
 
         // --- Discipline data and state ---
@@ -327,7 +464,7 @@
             const imagenUrl = originalRecorteUrl;
             const valor = nombreInput.value.trim();
             const clan = clanSelect.value;
-            const senda = sendaSelect.value;
+            const senda = getSendaValue();
             const disciplinas = getSelectedDisciplinas();
             if (!imagenUrl || imagenUrl.includes('undefined') || imagenUrl === '') return;
             const requestId = ++lastRequestId;
@@ -337,7 +474,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ clan: clan, nombre: valor, senda: senda, disciplinas: disciplinas, habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_name: getLayoutValue(), clan: clan, nombre: valor, senda: senda, disciplinas: disciplinas, simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
             })
             .then(function(response) { return response.json(); })
             .then(function(data) {
@@ -371,7 +508,7 @@
             const cartaImg = getCartaImg();
             const imagenUrl = originalRecorteUrl;
             const clan = clanSelect.value;
-            const senda = sendaSelect.value;
+            const senda = getSendaValue();
             if (!valor) {
                 if (cartaImg && originalRecorteUrl) {
                     cartaImg.src = originalRecorteUrl;
@@ -388,7 +525,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ nombre: valor, clan: clan, senda: senda, disciplinas: getSelectedDisciplinas(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_name: getLayoutValue(), nombre: valor, clan: clan, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
             })
             .then(response => response.json())
             .then(data => {
@@ -403,7 +540,7 @@
             const cartaImg = getCartaImg();
             const imagenUrl = originalRecorteUrl;
             const valor = nombreInput.value.trim();
-            const senda = sendaSelect.value;
+            const senda = getSendaValue();
             if (!clan) {
                 return;
             }
@@ -417,7 +554,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_name: getLayoutValue(), clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
             })
             .then(response => response.json())
             .then(data => {
@@ -451,7 +588,7 @@
 
         // --- SENDA/PATH ---
         function renderSenda() {
-            const senda = sendaSelect.value;
+            const senda = getSendaValue();
             const cartaImg = getCartaImg();
             const imagenUrl = originalRecorteUrl;
             const valor = nombreInput.value.trim();
@@ -469,7 +606,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_name: getLayoutValue(), clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
             })
             .then(response => response.json())
             .then(data => {
@@ -489,7 +626,7 @@
             const imagenUrl = originalRecorteUrl;
             const valor = nombreInput.value.trim();
             const clan = clanSelect.value;
-            const senda = sendaSelect.value;
+            const senda = getSendaValue();
             const coste = costeSelect.value;
             if (!imagenUrl || imagenUrl.includes('undefined') || imagenUrl === '') return;
             const requestId = ++lastRequestId;
@@ -499,7 +636,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: coste, cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_name: getLayoutValue(), clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: coste, cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
             })
             .then(function(response) { return response.json(); })
             .then(function(data) {
@@ -520,7 +657,7 @@
             const imagenUrl = originalRecorteUrl;
             const valor = nombreInput.value.trim();
             const clan = clanSelect.value;
-            const senda = sendaSelect.value;
+            const senda = getSendaValue();
             const disciplinas = getSelectedDisciplinas();
             if (!imagenUrl || imagenUrl.includes('undefined') || imagenUrl === '') return;
             const requestId = ++lastRequestId;
@@ -530,7 +667,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ clan: clan, nombre: valor, senda: senda, disciplinas: disciplinas, habilidad: habilidad, coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_name: getLayoutValue(), clan: clan, nombre: valor, senda: senda, disciplinas: disciplinas, simbolos: getSelectedSimbolos(), habilidad: habilidad, coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
             })
             .then(function(response) { return response.json(); })
             .then(function(data) {
@@ -558,15 +695,34 @@
             });
         }
 
+        // --- Slider de tamaño de fuente del texto de habilidad ---
+        const habFontSizeSlider = document.getElementById('hab-font-size');
+        const habFontSizeVal = document.getElementById('hab-font-size-val');
+        if (habFontSizeSlider) {
+            habFontSizeSlider.addEventListener('input', function() {
+                habFontSizeVal.textContent = habFontSizeSlider.value + 'px';
+            });
+            habFontSizeSlider.addEventListener('change', function() {
+                renderHabilidad();
+            });
+        }
+
+        layoutSelect && layoutSelect.addEventListener('change', function() {
+            renderHabilidad();
+        });
+
         // Mostrar símbolo al cargar la página si hay clan seleccionado + construir grid disciplinas
         document.addEventListener('DOMContentLoaded', function() {
+            buildSymbolGrid();
             buildDiscGrid();
         });
 
         // --- Guardar carta ---
-        document.getElementById('guardarCartaBtn').addEventListener('click', function() {
+        const guardarCartaBtn = document.getElementById('guardarCartaBtn');
+        guardarCartaBtn && guardarCartaBtn.addEventListener('click', function() {
             const cartaImg = getCartaImg();
             const feedback = document.getElementById('guardar-feedback');
+            const nombreCarta = ((document.getElementById('nombre') || {}).value || '').trim();
             if (!cartaImg || !cartaImg.src || cartaImg.src.includes('undefined')) {
                 feedback.textContent = '⚠️ No hay carta renderizada.';
                 feedback.style.color = 'orange';
@@ -583,7 +739,7 @@
             fetch('/srv-textos/guardar-carta/', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value},
-                body: JSON.stringify({ render_url: renderUrl })
+                body: JSON.stringify({ render_url: renderUrl, nombre: nombreCarta })
             })
             .then(r => r.json())
             .then(data => {
@@ -647,6 +803,7 @@
                 cropper.getCroppedCanvas({width: realWidth, height: realHeight}).toBlob(function(blob) {
                     const formData = new FormData();
                     formData.append('imagen', blob, 'recorte.jpg');
+                    formData.append('destino', cardType);
                     fetch('/recorte/recortar-imagen/', {
                         method: 'POST',
                         body: formData
