@@ -84,6 +84,36 @@
             font-size: 1.2rem;
             letter-spacing: 1px;
         }
+        .autocomplete-wrap {
+            position: relative;
+        }
+        .autocomplete-list {
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+            max-height: 220px;
+            overflow-y: auto;
+            z-index: 8;
+            display: none;
+        }
+        .autocomplete-item {
+            display: block;
+            width: 100%;
+            border: 0;
+            background: transparent;
+            text-align: left;
+            padding: 0.38rem 0.5rem;
+            font-size: 0.82rem;
+            color: #212529;
+        }
+        .autocomplete-item:hover {
+            background: #f1f3f5;
+        }
         .form-label { margin-bottom: 0.15rem; font-size: 0.8rem; }
         .form-control, .form-select { font-size: 0.85rem; padding: 0.25rem 0.5rem; }
         .mb-2 { margin-bottom: 0.4rem !important; }
@@ -182,9 +212,10 @@
                 <form>
                     {% csrf_token %}
                     <!-- Fila 1: Nombre -->
-                    <div class="mb-2">
+                    <div class="mb-2 autocomplete-wrap">
                         <label for="nombre" class="form-label">Nombre</label>
-                        <input type="text" class="form-control form-control-sm" id="nombre" name="nombre" placeholder="Nombre de la carta">
+                        <input type="text" class="form-control form-control-sm" id="nombre" name="nombre" placeholder="Nombre de la carta" autocomplete="off">
+                        <div id="nombre-suggestions" class="autocomplete-list"></div>
                     </div>
                     <!-- Fila 2: Clan + Senda -->
                     <div class="row g-2 mb-2">
@@ -319,6 +350,9 @@
         const layoutSelect = document.getElementById('layout-select');
         const cardType = '{{ card_type|default:"cripta" }}';
         const nombreInput = document.getElementById('nombre');
+        const nombreSuggestions = document.getElementById('nombre-suggestions');
+        let lastSuggestionsRequestId = 0;
+        let applyingAutocomplete = false;
         function getCartaImg() {
             return document.querySelector('.recorte-img');
         }
@@ -336,6 +370,23 @@
 
         function getSelectedSimbolos() {
             return selectedSimbolos.slice();
+        }
+
+        function setSelectedSimbolos(symbolNames) {
+            if (cardType !== 'libreria') return;
+            const wanted = new Set((symbolNames || []).map(function(name) {
+                return String(name || '').trim().toLowerCase();
+            }));
+            selectedSimbolos = [];
+            document.querySelectorAll('#symbol-grid .symbol-icon').forEach(function(img) {
+                const symbolName = String(img.dataset.symbol || '').trim();
+                if (wanted.has(symbolName.toLowerCase())) {
+                    selectedSimbolos.push(symbolName);
+                    img.classList.add('selected');
+                } else {
+                    img.classList.remove('selected');
+                }
+            });
         }
 
         function buildSymbolGrid() {
@@ -459,6 +510,33 @@
                 .map(function(e) { return {name: e[0], level: e[1]}; });
         }
 
+        function resetDisciplinas() {
+            Object.keys(DISCIPLINES).forEach(function(key) {
+                discStates[key] = 'none';
+                const img = document.querySelector('#disc-grid .disc-icon[data-disc=\"' + key + '\"]');
+                if (!img) return;
+                img.src = '/static/disc_inf/' + key + '.svg';
+                img.className = 'disc-icon state-none';
+            });
+        }
+
+        function setSelectedDisciplinas(disciplinas) {
+            resetDisciplinas();
+            (disciplinas || []).forEach(function(disc) {
+                const key = String((disc || {}).name || '').trim().toLowerCase();
+                if (!DISCIPLINES[key]) return;
+                let level = String((disc || {}).level || 'inf').trim().toLowerCase();
+                if (level !== 'sup' || !DISCIPLINES[key].hasSup) {
+                    level = 'inf';
+                }
+                discStates[key] = level;
+                const img = document.querySelector('#disc-grid .disc-icon[data-disc=\"' + key + '\"]');
+                if (!img) return;
+                img.src = '/static/' + (level === 'sup' ? 'disc_sup' : 'disc_inf') + '/' + key + '.svg';
+                img.className = 'disc-icon state-' + level;
+            });
+        }
+
         function renderDisciplinas() {
             const cartaImg = getCartaImg();
             const imagenUrl = originalRecorteUrl;
@@ -500,6 +578,108 @@
                 timeout = setTimeout(() => fn.apply(this, args), delay);
             };
         }
+
+        function hideNombreSuggestions() {
+            if (!nombreSuggestions) return;
+            nombreSuggestions.innerHTML = '';
+            nombreSuggestions.style.display = 'none';
+        }
+
+        function renderNombreSuggestions(results) {
+            if (!nombreSuggestions) return;
+            nombreSuggestions.innerHTML = '';
+            if (!results || !results.length) {
+                nombreSuggestions.style.display = 'none';
+                return;
+            }
+
+            results.forEach(function(item) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'autocomplete-item';
+                button.textContent = item.name;
+                button.addEventListener('click', function() {
+                    selectNombreSuggestion(item.name);
+                });
+                nombreSuggestions.appendChild(button);
+            });
+            nombreSuggestions.style.display = 'block';
+        }
+
+        function setSelectValue(selectEl, value) {
+            if (!selectEl) return;
+            const val = String(value || '').trim();
+            const exists = Array.from(selectEl.options || []).some(function(opt) {
+                return opt.value === val;
+            });
+            selectEl.value = exists ? val : '';
+        }
+
+        function applyAutocompletePayload(card) {
+            if (!card) return;
+            applyingAutocomplete = true;
+            try {
+                const payload = card || {};
+                if (payload.nombre) {
+                    nombreInput.value = payload.nombre;
+                }
+                setSelectValue(clanSelect, payload.clan || '');
+                setSelectValue(sendaSelect, payload.senda || '');
+                setSelectValue(document.getElementById('coste'), payload.coste || '');
+                setSelectValue(document.getElementById('cripta'), payload.cripta || '');
+
+                const habilidadEl = document.getElementById('habilidad');
+                if (habilidadEl) {
+                    habilidadEl.value = payload.habilidad || '';
+                }
+                const ilustradorEl = document.getElementById('ilustrador');
+                if (ilustradorEl) {
+                    ilustradorEl.value = payload.ilustrador || '';
+                }
+
+                setSelectedDisciplinas(payload.disciplinas || []);
+                setSelectedSimbolos(payload.simbolos || []);
+                hideNombreSuggestions();
+            } finally {
+                applyingAutocomplete = false;
+            }
+            renderHabilidad();
+        }
+
+        function selectNombreSuggestion(name) {
+            const cardName = String(name || '').trim();
+            if (!cardName) return;
+            hideNombreSuggestions();
+            fetch('/srv-textos/autocompletar-carta/?card_type=' + encodeURIComponent(cardType) + '&name=' + encodeURIComponent(cardName))
+                .then(function(response) {
+                    if (!response.ok) return null;
+                    return response.json();
+                })
+                .then(function(data) {
+                    if (!data || !data.card) return;
+                    applyAutocompletePayload(data.card);
+                })
+                .catch(function() {});
+        }
+
+        const buscarSugerenciasNombre = debounce(function() {
+            const query = (nombreInput.value || '').trim();
+            if (query.length < 2) {
+                hideNombreSuggestions();
+                return;
+            }
+            const requestId = ++lastSuggestionsRequestId;
+            fetch('/srv-textos/buscar-cartas/?card_type=' + encodeURIComponent(cardType) + '&q=' + encodeURIComponent(query) + '&limit=10')
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    if (requestId !== lastSuggestionsRequestId) return;
+                    renderNombreSuggestions(data.results || []);
+                })
+                .catch(function() {
+                    if (requestId !== lastSuggestionsRequestId) return;
+                    hideNombreSuggestions();
+                });
+        }, 180);
 
         // Control solo para evitar sobrescritura por peticiones asíncronas, pero siempre permite actualizar si el nombre cambia
         let lastRequestId = 0;
@@ -568,7 +748,22 @@
         nombreInput.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
+                const firstSuggestion = nombreSuggestions ? nombreSuggestions.querySelector('.autocomplete-item') : null;
+                if (firstSuggestion) {
+                    firstSuggestion.click();
+                    return;
+                }
                 renderNombre();
+            }
+        });
+        nombreInput.addEventListener('input', function() {
+            if (applyingAutocomplete) return;
+            buscarSugerenciasNombre();
+        });
+        document.addEventListener('click', function(e) {
+            if (!nombreSuggestions) return;
+            if (!e.target.closest('.autocomplete-wrap')) {
+                hideNombreSuggestions();
             }
         });
         clanSelect && clanSelect.addEventListener('change', function() {

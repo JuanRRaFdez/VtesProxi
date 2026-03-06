@@ -7,6 +7,7 @@ import shutil
 import re
 from PIL import Image, ImageDraw, ImageFont
 from django.utils.crypto import get_random_string
+from .card_catalog import search_card_suggestions, get_card_autocomplete
 
 
 def _load_layout(layout_name=None):
@@ -1134,3 +1135,36 @@ def guardar_carta(request):
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': str(e)}, status=500)
+
+
+def buscar_cartas(request):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    card_type = (request.GET.get('card_type') or 'cripta').strip().lower()
+    query = (request.GET.get('q') or '').strip()
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+
+    try:
+        limit = int(request.GET.get('limit') or 10)
+    except (TypeError, ValueError):
+        limit = 10
+
+    results = search_card_suggestions(card_type, query, limit=limit)
+    return JsonResponse({'results': results})
+
+
+def autocompletar_carta(request):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    card_type = (request.GET.get('card_type') or 'cripta').strip().lower()
+    name = (request.GET.get('name') or '').strip()
+    if not name:
+        return JsonResponse({'error': 'Falta name'}, status=400)
+
+    card = get_card_autocomplete(card_type, name)
+    if not card:
+        return JsonResponse({'error': 'Carta no encontrada'}, status=404)
+    return JsonResponse({'card': card})
