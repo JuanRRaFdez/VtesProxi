@@ -1,11 +1,14 @@
 import os
+import io
+import json
 from datetime import datetime
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.conf import settings
 from django.core.paginator import Paginator
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, JsonResponse
 from urllib.parse import urlencode
+from .pdf_service import generate_pdf_bytes, validate_layout_params
 
 
 @login_required
@@ -82,3 +85,40 @@ def borrar_carta(request, filename):
     if params:
         url = f"{url}?{urlencode(params)}"
     return redirect(url)
+
+
+@login_required
+def generar_pdf_cartas(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    data = json.loads(request.body.decode('utf-8') or '{}')
+    selected = data.get('selected') or []
+    if not selected:
+        return JsonResponse({'error': 'Debes seleccionar al menos una carta'}, status=400)
+
+    width_mm = float(data.get('width_mm', 63))
+    height_mm = float(data.get('height_mm', 88))
+    copies = int(data.get('copies', 1))
+
+    try:
+        validate_layout_params(width_mm, height_mm, copies)
+    except ValueError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+
+    username = request.user.username
+    paths = [_resolve_user_card_path(username, fname) for fname in selected]
+    pdf_bytes = generate_pdf_bytes(
+        paths,
+        width_mm=width_mm,
+        height_mm=height_mm,
+        copies=copies,
+        cut_marks=True,
+    )
+    pdf_stream = io.BytesIO(pdf_bytes)
+    return FileResponse(
+        pdf_stream,
+        as_attachment=True,
+        filename=f"cartas_{username}.pdf",
+        content_type='application/pdf',
+    )
