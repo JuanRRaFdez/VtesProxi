@@ -23,3 +23,14 @@ def validate_layout_params(width_mm: float, height_mm: float, copies: int) -> No
         raise ValueError("height_mm debe ser > 0")
     if copies <= 0:
         raise ValueError("copies debe ser > 0")
+
+
+def generate_pdf_bytes(
+    image_paths: list[str],
+    width_mm: float,
+    height_mm: float,
+    copies: int,
+    cut_marks: bool,
+) -> bytes:
+    # Stub inicial TDD para validar el contrato HTTP del endpoint.
+    return b"%PDF-1.4\n%stub\n"

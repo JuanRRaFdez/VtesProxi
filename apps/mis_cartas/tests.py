@@ -1,4 +1,9 @@
-from django.test import SimpleTestCase
+import json
+import tempfile
+from pathlib import Path
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase, override_settings
 from apps.mis_cartas import pdf_service
 
 
@@ -23,3 +28,57 @@ class PdfServiceHelpersTests(SimpleTestCase):
             pdf_service.validate_layout_params(width_mm=63, height_mm=-1, copies=1)
         with self.assertRaises(ValueError):
             pdf_service.validate_layout_params(width_mm=63, height_mm=88, copies=0)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class MisCartasPdfEndpointTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="ana", password="secreto123"
+        )
+
+    def _crear_png_usuario(self, filename: str):
+        user_dir = Path(settings.MEDIA_ROOT) / "cartas" / self.user.username
+        user_dir.mkdir(parents=True, exist_ok=True)
+        user_dir.joinpath(filename).write_bytes(
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01\x0b\xe7\x02\x9d\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+
+    def test_requires_login(self):
+        response = self.client.post(
+            "/mis-cartas/generar-pdf/",
+            data=json.dumps({"selected": ["uno.png"]}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 302)
+
+    def test_rejects_empty_selection(self):
+        self.client.login(username="ana", password="secreto123")
+        response = self.client.post(
+            "/mis-cartas/generar-pdf/",
+            data=json.dumps({"selected": []}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_rejects_missing_card(self):
+        self.client.login(username="ana", password="secreto123")
+        response = self.client.post(
+            "/mis-cartas/generar-pdf/",
+            data=json.dumps({"selected": ["no-existe.png"]}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_returns_pdf_file_for_valid_selection(self):
+        self._crear_png_usuario("uno.png")
+        self.client.login(username="ana", password="secreto123")
+        response = self.client.post(
+            "/mis-cartas/generar-pdf/",
+            data=json.dumps(
+                {"selected": ["uno.png"], "width_mm": 63, "height_mm": 88, "copies": 1}
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
