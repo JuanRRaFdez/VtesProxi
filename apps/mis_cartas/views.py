@@ -11,29 +11,32 @@ from urllib.parse import urlencode
 from .pdf_service import generate_pdf_bytes, validate_layout_params
 
 
+def _list_user_cards(username, query_norm):
+    cartas_dir = os.path.join(settings.MEDIA_ROOT, 'cartas', username)
+    cartas = []
+    if os.path.exists(cartas_dir):
+        for fname in os.listdir(cartas_dir):
+            if not fname.lower().endswith('.png'):
+                continue
+            nombre_sin_ext = os.path.splitext(fname)[0]
+            if query_norm and query_norm not in nombre_sin_ext.lower():
+                continue
+            fpath = os.path.join(cartas_dir, fname)
+            mtime = os.path.getmtime(fpath)
+            fecha = datetime.fromtimestamp(mtime).strftime('%d/%m/%Y %H:%M')
+            url = settings.MEDIA_URL + f'cartas/{username}/{fname}'
+            cartas.append({'url': url, 'fecha': fecha, 'nombre': fname, 'mtime': mtime})
+    cartas.sort(key=lambda c: c['mtime'], reverse=True)
+    return cartas
+
+
 @login_required
 def mis_cartas(request):
     """Muestra todas las cartas guardadas del usuario autenticado."""
     username = request.user.username
-    cartas_dir = os.path.join(settings.MEDIA_ROOT, 'cartas', username)
     query = (request.GET.get('q') or '').strip().lower()
-    query_norm = query
     page_number = request.GET.get('page')
-    cartas = []
-    if os.path.exists(cartas_dir):
-        for fname in os.listdir(cartas_dir):
-            if fname.lower().endswith('.png'):
-                nombre_sin_ext = os.path.splitext(fname)[0]
-                if query_norm and query_norm not in nombre_sin_ext.lower():
-                    continue
-                fpath = os.path.join(cartas_dir, fname)
-                mtime = os.path.getmtime(fpath)
-                fecha = datetime.fromtimestamp(mtime).strftime('%d/%m/%Y %H:%M')
-                url = settings.MEDIA_URL + f'cartas/{username}/{fname}'
-                cartas.append({'url': url, 'fecha': fecha, 'nombre': fname, 'mtime': mtime})
-
-    cartas.sort(key=lambda c: c['mtime'], reverse=True)
-
+    cartas = _list_user_cards(username, query)
     paginator = Paginator(cartas, 60)
     page_obj = paginator.get_page(page_number)
 
@@ -42,6 +45,21 @@ def mis_cartas(request):
         'query': query,
         'page_obj': page_obj,
     })
+
+
+@login_required
+def pdf_workspace(request):
+    username = request.user.username
+    query = (request.GET.get('q') or '').strip().lower()
+    cartas = _list_user_cards(username, query)
+    return render(
+        request,
+        'mis_cartas/pdf_workspace.html',
+        {
+            'cartas': cartas,
+            'query': query,
+        },
+    )
 
 
 def _resolve_user_card_path(username, filename):
@@ -93,26 +111,46 @@ def generar_pdf_cartas(request):
         return JsonResponse({'error': 'Método no permitido'}, status=405)
 
     data = json.loads(request.body.decode('utf-8') or '{}')
-    selected = data.get('selected') or []
-    if not selected:
-        return JsonResponse({'error': 'Debes seleccionar al menos una carta'}, status=400)
-
     width_mm = float(data.get('width_mm', 63))
     height_mm = float(data.get('height_mm', 88))
+    items = data.get('items') or []
+    selected = data.get('selected') or []
     copies = int(data.get('copies', 1))
 
+    username = request.user.username
+    selected_paths = []
+
+    if items:
+        for item in items:
+            if not isinstance(item, dict):
+                return JsonResponse({'error': 'Formato de items inválido'}, status=400)
+            filename = item.get('filename')
+            quantity = item.get('quantity')
+            try:
+                quantity = int(quantity)
+            except (TypeError, ValueError):
+                return JsonResponse({'error': 'La cantidad por carta debe ser un entero'}, status=400)
+            if quantity <= 0:
+                return JsonResponse({'error': 'La cantidad por carta debe ser mayor que 0'}, status=400)
+            card_path = _resolve_user_card_path(username, filename)
+            selected_paths.extend([card_path] * quantity)
+        effective_copies = 1
+    else:
+        if not selected:
+            return JsonResponse({'error': 'Debes seleccionar al menos una carta'}, status=400)
+        selected_paths = [_resolve_user_card_path(username, fname) for fname in selected]
+        effective_copies = copies
+
     try:
-        validate_layout_params(width_mm, height_mm, copies)
+        validate_layout_params(width_mm, height_mm, effective_copies)
     except ValueError as exc:
         return JsonResponse({'error': str(exc)}, status=400)
 
-    username = request.user.username
-    paths = [_resolve_user_card_path(username, fname) for fname in selected]
     pdf_bytes = generate_pdf_bytes(
-        paths,
+        selected_paths,
         width_mm=width_mm,
         height_mm=height_mm,
-        copies=copies,
+        copies=effective_copies,
         cut_marks=True,
     )
     pdf_stream = io.BytesIO(pdf_bytes)

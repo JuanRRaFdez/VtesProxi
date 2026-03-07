@@ -115,3 +115,85 @@ class MisCartasTemplateTests(TestCase):
         self.assertContains(response, 'id="bulkPdfForm"')
         self.assertContains(response, 'name="selected"')
         self.assertContains(response, 'id="generatePdfBtn"')
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class PdfTabWorkspaceTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="marta", password="secreto123"
+        )
+
+    def _crear_png_usuario(self, filename: str):
+        user_dir = Path(settings.MEDIA_ROOT) / "cartas" / self.user.username
+        user_dir.mkdir(parents=True, exist_ok=True)
+        user_dir.joinpath(filename).write_bytes(
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01\x0b\xe7\x02\x9d\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+
+    def test_pdf_tab_requires_login(self):
+        response = self.client.get("/pdf/")
+        self.assertEqual(response.status_code, 302)
+
+    def test_pdf_tab_is_linked_in_sidebar(self):
+        self.client.login(username="marta", password="secreto123")
+        response = self.client.get("/mis-cartas/")
+        self.assertContains(response, 'href="/pdf/"')
+
+    def test_pdf_tab_contains_builder_controls(self):
+        self._crear_png_usuario("uno.png")
+        self.client.login(username="marta", password="secreto123")
+        response = self.client.get("/pdf/")
+        self.assertContains(response, 'id="pdfBuilderApp"')
+        self.assertContains(response, 'id="pdfItemsTableBody"')
+        self.assertContains(response, 'id="generatePdfFromTabBtn"')
+        self.assertContains(response, 'data-filename="uno.png"')
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class MisCartasPdfItemsPayloadTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="ines", password="secreto123"
+        )
+
+    def _crear_png_usuario(self, filename: str):
+        user_dir = Path(settings.MEDIA_ROOT) / "cartas" / self.user.username
+        user_dir.mkdir(parents=True, exist_ok=True)
+        user_dir.joinpath(filename).write_bytes(
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc```\x00\x00\x00\x04\x00\x01\x0b\xe7\x02\x9d\x00\x00\x00\x00IEND\xaeB`\x82"
+        )
+
+    def test_returns_pdf_for_items_payload(self):
+        self._crear_png_usuario("uno.png")
+        self.client.login(username="ines", password="secreto123")
+        response = self.client.post(
+            "/mis-cartas/generar-pdf/",
+            data=json.dumps(
+                {
+                    "items": [{"filename": "uno.png", "quantity": 2}],
+                    "width_mm": 63,
+                    "height_mm": 88,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+
+    def test_rejects_invalid_quantity(self):
+        self._crear_png_usuario("uno.png")
+        self.client.login(username="ines", password="secreto123")
+        response = self.client.post(
+            "/mis-cartas/generar-pdf/",
+            data=json.dumps(
+                {
+                    "items": [{"filename": "uno.png", "quantity": 0}],
+                    "width_mm": 63,
+                    "height_mm": 88,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("cantidad", response.json().get("error", "").lower())

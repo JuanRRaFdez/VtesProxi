@@ -22,6 +22,7 @@ from django.contrib.auth import views as auth_views
 from django.http import HttpResponseRedirect
 from django.conf import settings
 from django.conf.urls.static import static
+from apps.mis_cartas import views as mis_cartas_views
 
 def root_redirect(request):
     return HttpResponseRedirect('/login/')
@@ -35,6 +36,7 @@ urlpatterns = [
     path('cripta/', include('apps.cripta.urls')),
     path('libreria/', include('apps.libreria.urls')),
     path('mis-cartas/', include('apps.mis_cartas.urls', namespace='mis_cartas')),
+    path('pdf/', mis_cartas_views.pdf_workspace, name='pdf_workspace'),
     path('recorte/', include('apps.srv_recorte.urls')),
     path('srv-textos/', include('apps.srv_textos.urls')),
 ]
