@@ -4,6 +4,7 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase, override_settings
+from PIL import Image
 from apps.mis_cartas import pdf_service
 
 
@@ -82,3 +83,21 @@ class MisCartasPdfEndpointTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
+
+
+class PdfServiceRenderTests(SimpleTestCase):
+    def test_generate_pdf_bytes_returns_real_pdf(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            img_path = Path(tmp) / "uno.png"
+            Image.new("RGB", (300, 420), color=(20, 20, 20)).save(img_path, "PNG")
+
+            pdf = pdf_service.generate_pdf_bytes(
+                [str(img_path)],
+                width_mm=63,
+                height_mm=88,
+                copies=1,
+                cut_marks=True,
+            )
+
+        self.assertTrue(pdf.startswith(b"%PDF"))
+        self.assertIn(b"/Type /Page", pdf)
