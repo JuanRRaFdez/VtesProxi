@@ -101,3 +101,17 @@ class PdfServiceRenderTests(SimpleTestCase):
 
         self.assertTrue(pdf.startswith(b"%PDF"))
         self.assertIn(b"/Type /Page", pdf)
+
+
+class MisCartasTemplateTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="pepe", password="secreto123"
+        )
+
+    def test_mis_cartas_contains_pdf_bulk_form(self):
+        self.client.login(username="pepe", password="secreto123")
+        response = self.client.get("/mis-cartas/")
+        self.assertContains(response, 'id="bulkPdfForm"')
+        self.assertContains(response, 'name="selected"')
+        self.assertContains(response, 'id="generatePdfBtn"')

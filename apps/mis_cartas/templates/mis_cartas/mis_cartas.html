@@ -105,6 +105,26 @@
         margin-top: 3rem;
         text-align: center;
     }
+    .bulk-pdf-panel {
+        background: rgba(255, 255, 255, 0.06);
+        border-radius: 8px;
+        padding: 0.8rem;
+        margin-bottom: 1rem;
+    }
+    .carta-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .carta-select-label {
+        color: #ddd;
+        font-size: 0.75rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        margin: 0;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -122,6 +142,25 @@
     </div>
     {% endif %}
 </form>
+<form id="bulkPdfForm" class="bulk-pdf-panel row g-2 align-items-end">
+    {% csrf_token %}
+    <input type="hidden" name="selected" value="">
+    <div class="col-12 col-md-2">
+        <label for="pdfWidth" class="form-label form-label-sm text-white mb-1">Ancho (mm)</label>
+        <input type="number" id="pdfWidth" value="63" min="1" step="0.1" class="form-control form-control-sm">
+    </div>
+    <div class="col-12 col-md-2">
+        <label for="pdfHeight" class="form-label form-label-sm text-white mb-1">Alto (mm)</label>
+        <input type="number" id="pdfHeight" value="88" min="1" step="0.1" class="form-control form-control-sm">
+    </div>
+    <div class="col-12 col-md-2">
+        <label for="pdfCopies" class="form-label form-label-sm text-white mb-1">Copias</label>
+        <input type="number" id="pdfCopies" value="1" min="1" step="1" class="form-control form-control-sm">
+    </div>
+    <div class="col-12 col-md-auto">
+        <button type="button" id="generatePdfBtn" class="btn btn-success btn-sm">Generar PDF</button>
+    </div>
+</form>
 {% if cartas %}
 <div class="cartas-grid">
     {% for carta in cartas %}
@@ -129,7 +168,13 @@
         <div class="carta-img-wrap" onclick="openModal('{{ carta.url }}', '{{ carta.nombre|escapejs }}')">
             <img src="{{ carta.url }}" alt="Carta" loading="lazy">
         </div>
-        <div class="carta-footer">{{ carta.fecha }}</div>
+        <div class="carta-footer">
+            <label class="carta-select-label" onclick="event.stopPropagation();">
+                <input type="checkbox" class="card-select" name="selected" value="{{ carta.nombre }}">
+                Seleccionar
+            </label>
+            <span>{{ carta.fecha }}</span>
+        </div>
     </div>
     {% endfor %}
 </div>
@@ -192,6 +237,42 @@
 <script>
 const downloadUrlPattern = "{% url 'mis_cartas:descargar_carta' '__FILENAME__' %}";
 const deleteUrlPattern = "{% url 'mis_cartas:borrar_carta' '__FILENAME__' %}";
+const pdfGenerateUrl = "{% url 'mis_cartas:generar_pdf_cartas' %}";
+
+document.getElementById('generatePdfBtn')?.addEventListener('click', async function () {
+    const selected = Array.from(
+        document.querySelectorAll('.card-select:checked')
+    ).map((el) => el.value);
+    const payload = {
+        selected,
+        width_mm: parseFloat(document.getElementById('pdfWidth')?.value || '63'),
+        height_mm: parseFloat(document.getElementById('pdfHeight')?.value || '88'),
+        copies: parseInt(document.getElementById('pdfCopies')?.value || '1', 10),
+    };
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
+    const response = await fetch(pdfGenerateUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+        alert('No se pudo generar el PDF.');
+        return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'cartas.pdf';
+    anchor.click();
+    URL.revokeObjectURL(url);
+});
 
 function openModal(url, filename) {
     document.getElementById('modalImg').src = url;
