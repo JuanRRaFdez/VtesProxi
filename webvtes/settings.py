@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'apps.mis_cartas',
     'apps.srv_recorte',
     'apps.srv_textos',
+    'apps.layouts',
 ]
 
 MIDDLEWARE = [
