@@ -1,6 +1,7 @@
 # Visual Layouts Builder Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> Progress log: `docs/plans/2026-03-10-layouts-visual-builder-progress.md`
 
 **Goal:** Implementar una app `layouts` para crear/editar layouts visuales privados por usuario (Cripta y Librería), con drag & resize, guardado en BD y default por tipo.
 
