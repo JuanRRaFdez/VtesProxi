@@ -39,6 +39,7 @@ urlpatterns = [
     path('pdf/', mis_cartas_views.pdf_workspace, name='pdf_workspace'),
     path('recorte/', include('apps.srv_recorte.urls')),
     path('srv-textos/', include('apps.srv_textos.urls')),
+    path('layouts/', include('apps.layouts.urls')),
 ]
 
 # Servir archivos MEDIA en desarrollo

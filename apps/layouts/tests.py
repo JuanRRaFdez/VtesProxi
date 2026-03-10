@@ -45,3 +45,9 @@ class UserLayoutModelTests(TestCase):
                     config={},
                     is_default=True,
                 )
+
+
+class LayoutEditorAccessTests(TestCase):
+    def test_editor_requires_login(self):
+        response = self.client.get('/layouts/')
+        self.assertEqual(response.status_code, 302)
