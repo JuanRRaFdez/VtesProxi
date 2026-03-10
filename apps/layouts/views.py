@@ -1,10 +1,12 @@
+import json
+
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 
 from apps.layouts.models import UserLayout
-from apps.layouts.services import load_classic_seed
+from apps.layouts.services import LayoutValidationError, load_classic_seed, validate_layout_config
 
 
 @login_required
@@ -20,6 +22,15 @@ def _serialize_layout(layout):
         'config': layout.config,
         'is_default': layout.is_default,
     }
+
+
+def _get_payload(request):
+    if request.content_type and 'application/json' in request.content_type:
+        try:
+            return json.loads(request.body.decode('utf-8') or '{}')
+        except json.JSONDecodeError:
+            return None
+    return request.POST
 
 
 @login_required
@@ -41,8 +52,12 @@ def api_create(request):
     if request.method != 'POST':
         return JsonResponse({'error': 'Método no permitido'}, status=405)
 
-    name = (request.POST.get('name') or '').strip()
-    card_type = (request.POST.get('card_type') or '').strip().lower()
+    payload = _get_payload(request)
+    if payload is None:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    name = (payload.get('name') or '').strip()
+    card_type = (payload.get('card_type') or '').strip().lower()
     if not name:
         return JsonResponse({'error': 'name es obligatorio'}, status=400)
     if card_type not in ('cripta', 'libreria'):
@@ -68,4 +83,30 @@ def api_detail(request, layout_id):
         return JsonResponse({'error': 'Método no permitido'}, status=405)
 
     layout = get_object_or_404(UserLayout, id=layout_id, user=request.user)
+    return JsonResponse({'layout': _serialize_layout(layout)})
+
+
+@login_required
+def api_update_config(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    payload = _get_payload(request)
+    if payload is None:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    layout_id = payload.get('layout_id')
+    config = payload.get('config')
+    if not layout_id:
+        return JsonResponse({'error': 'layout_id es obligatorio'}, status=400)
+    if config is None:
+        return JsonResponse({'error': 'config es obligatorio'}, status=400)
+
+    layout = get_object_or_404(UserLayout, id=layout_id, user=request.user)
+    try:
+        layout.config = validate_layout_config(layout.card_type, config)
+    except LayoutValidationError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+
+    layout.save(update_fields=['config'])
     return JsonResponse({'layout': _serialize_layout(layout)})

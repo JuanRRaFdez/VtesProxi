@@ -1,8 +1,12 @@
+from copy import deepcopy
+import json
+
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from apps.layouts.models import UserLayout
+from apps.layouts.services import load_classic_seed
 
 
 class UserLayoutModelTests(TestCase):
@@ -109,3 +113,51 @@ class LayoutApiListCreateTests(TestCase):
         response = self.client.get(f'/layouts/api/detail/{other_layout.id}')
 
         self.assertEqual(response.status_code, 404)
+
+
+class LayoutConfigValidationTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='config-user', password='secret')
+        self.layout = UserLayout.objects.create(
+            user=self.user,
+            name='Editable',
+            card_type='cripta',
+            config=load_classic_seed('cripta'),
+            is_default=False,
+        )
+
+    def test_update_config_rejects_invalid_payload(self):
+        invalid_config = deepcopy(self.layout.config)
+        invalid_config['carta']['width'] = -10
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            '/layouts/api/update-config',
+            data=json.dumps({
+                'layout_id': self.layout.id,
+                'config': invalid_config,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.layout.refresh_from_db()
+        self.assertNotEqual(self.layout.config['carta']['width'], -10)
+
+    def test_update_config_accepts_valid_payload(self):
+        valid_config = deepcopy(self.layout.config)
+        valid_config['carta']['width'] = 900
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            '/layouts/api/update-config',
+            data=json.dumps({
+                'layout_id': self.layout.id,
+                'config': valid_config,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.config['carta']['width'], 900)
