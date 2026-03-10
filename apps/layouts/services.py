@@ -2,6 +2,8 @@ import json
 from copy import deepcopy
 from pathlib import Path
 
+from apps.layouts.models import UserLayout
+
 
 CLASSIC_LAYOUTS_PATH = Path(__file__).resolve().parent.parent / 'srv_textos' / 'layouts.json'
 
@@ -30,6 +32,10 @@ def load_classic_seed(card_type):
 
 
 class LayoutValidationError(ValueError):
+    pass
+
+
+class LayoutOwnershipError(PermissionError):
     pass
 
 
@@ -155,3 +161,31 @@ def validate_layout_config(card_type, config):
         _expect_number(simbolos, 'spacing', 0, 1000)
 
     return normalized
+
+
+def get_user_layout_config(request_user, card_type, layout_id=None):
+    normalized_card_type = (card_type or '').strip().lower()
+    if normalized_card_type not in ('cripta', 'libreria'):
+        normalized_card_type = 'cripta'
+
+    if layout_id is not None:
+        selected = UserLayout.objects.filter(id=layout_id).first()
+        if selected is None:
+            return None
+        if not request_user or not request_user.is_authenticated:
+            raise LayoutOwnershipError('No autenticado')
+        if selected.user_id != request_user.id:
+            raise LayoutOwnershipError('Layout no pertenece al usuario')
+        if selected.card_type != normalized_card_type:
+            raise LayoutValidationError('layout_id no coincide con card_type')
+        return deepcopy(selected.config)
+
+    if request_user and request_user.is_authenticated:
+        default_layout = UserLayout.objects.filter(
+            user=request_user,
+            card_type=normalized_card_type,
+            is_default=True,
+        ).first()
+        if default_layout:
+            return deepcopy(default_layout.config)
+    return None

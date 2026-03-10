@@ -7,6 +7,12 @@ import shutil
 import re
 from PIL import Image, ImageDraw, ImageFont
 from django.utils.crypto import get_random_string
+from apps.layouts.services import (
+    LayoutOwnershipError,
+    LayoutValidationError,
+    get_user_layout_config,
+    validate_layout_config,
+)
 from .card_catalog import search_card_suggestions, get_card_autocomplete
 
 
@@ -21,6 +27,53 @@ def _load_layout(layout_name=None):
     if layout is None:
         raise KeyError(f"Layout '{selected}' no encontrado en layouts.json")
     return layout
+
+
+def _normalize_card_type(card_type):
+    normalized = (card_type or 'cripta').strip().lower()
+    if normalized not in ('cripta', 'libreria'):
+        return 'cripta'
+    return normalized
+
+
+def _resolve_layout_config(request_user, card_type, layout_id=None, layout_name=None, layout_override=None):
+    normalized_card_type = _normalize_card_type(card_type)
+
+    if layout_override is not None:
+        return validate_layout_config(normalized_card_type, layout_override)
+
+    normalized_layout_id = layout_id
+    if isinstance(normalized_layout_id, str):
+        normalized_layout_id = normalized_layout_id.strip()
+        if not normalized_layout_id:
+            normalized_layout_id = None
+
+    if normalized_layout_id is not None:
+        try:
+            normalized_layout_id = int(normalized_layout_id)
+        except (TypeError, ValueError) as exc:
+            raise LayoutValidationError('layout_id inválido') from exc
+
+        selected = get_user_layout_config(
+            request_user=request_user,
+            card_type=normalized_card_type,
+            layout_id=normalized_layout_id,
+        )
+        if selected is None:
+            raise LayoutValidationError('layout_id no existe')
+        return selected
+
+    default_layout = get_user_layout_config(
+        request_user=request_user,
+        card_type=normalized_card_type,
+    )
+    if default_layout is not None:
+        return default_layout
+
+    try:
+        return _load_layout(layout_name)
+    except KeyError as exc:
+        raise LayoutValidationError(str(exc)) from exc
 
 
 def _safe_card_filename_base(nombre):
@@ -675,7 +728,7 @@ def _render_habilidad_text_libreria(image, text, x, y, max_width, font_size, col
 
 
 # --- Helper principal: renderiza TODOS los elementos sobre la imagen base ---
-def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, simbolos=None, habilidad='', coste='', cripta='', ilustrador='', hab_opacity=180, hab_font_size=None, card_type='cripta', layout_name=None):
+def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, simbolos=None, habilidad='', coste='', cripta='', ilustrador='', hab_opacity=180, hab_font_size=None, card_type='cripta', layout_name=None, layout_config=None):
     """
     Renderiza todos los elementos de la carta sobre la imagen base.
     Cada elemento tiene posición fija e independiente:
@@ -689,22 +742,20 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     if not os.path.exists(imagen_abspath):
         return None, 'Imagen no encontrada'
 
-    lay = _load_layout(layout_name)
+    lay = layout_config if layout_config is not None else _load_layout(layout_name)
     lc  = lay['carta']
-    card_type = (card_type or 'cripta').strip().lower()
-    if card_type not in ('cripta', 'libreria'):
-        card_type = 'cripta'
+    card_type = _normalize_card_type(card_type)
 
     layout_scope = lay.get('libreria', {}) if card_type == 'libreria' else lay
-    ln  = layout_scope.get('nombre', lay['nombre'])
-    lcl = layout_scope.get('clan', lay['clan'])
+    ln  = layout_scope.get('nombre') or lay.get('nombre')
+    lcl = layout_scope.get('clan') or lay.get('clan')
     ls  = layout_scope.get('senda')
-    ld  = layout_scope.get('disciplinas', lay['disciplinas'])
+    ld  = layout_scope.get('disciplinas') or lay.get('disciplinas')
     lsi = layout_scope.get('simbolos') if card_type == 'libreria' else None
-    lh  = layout_scope.get('habilidad', lay['habilidad'])
-    lco = layout_scope.get('coste', lay['coste'])
+    lh  = layout_scope.get('habilidad') or lay.get('habilidad')
+    lco = layout_scope.get('coste') or lay.get('coste')
     lcr = lay.get('cripta') if card_type == 'cripta' else None
-    lil = layout_scope.get('ilustrador', lay.get('ilustrador'))
+    lil = layout_scope.get('ilustrador') or lay.get('ilustrador')
 
     card_w = lc['width']
     card_h = lc['height']
@@ -987,16 +1038,46 @@ def render_nombre(request):
         ilustrador = (data.get('ilustrador') or '').strip()
         hab_opacity = int(data.get('hab_opacity', 180))
         hab_font_size = int(data.get('hab_font_size', 33))
-        card_type = (data.get('card_type') or 'cripta').strip().lower()
+        card_type = _normalize_card_type(data.get('card_type'))
         layout_name = (data.get('layout_name') or '').strip()
+        layout_id = data.get('layout_id')
+        layout_override = data.get('layout_override')
         imagen_url = data.get('imagen_url', '')
         if not imagen_url:
             return JsonResponse({'error': 'Faltan datos'}, status=400)
 
-        render_url, error = _render_carta(imagen_url, nombre=nombre, clan=clan, senda=senda, disciplinas=disciplinas, simbolos=simbolos, habilidad=habilidad, coste=coste, cripta=cripta, ilustrador=ilustrador, hab_opacity=hab_opacity, hab_font_size=hab_font_size, card_type=card_type, layout_name=layout_name)
+        resolved_layout = _resolve_layout_config(
+            request_user=request.user,
+            card_type=card_type,
+            layout_id=layout_id,
+            layout_name=layout_name,
+            layout_override=layout_override,
+        )
+
+        render_url, error = _render_carta(
+            imagen_url,
+            nombre=nombre,
+            clan=clan,
+            senda=senda,
+            disciplinas=disciplinas,
+            simbolos=simbolos,
+            habilidad=habilidad,
+            coste=coste,
+            cripta=cripta,
+            ilustrador=ilustrador,
+            hab_opacity=hab_opacity,
+            hab_font_size=hab_font_size,
+            card_type=card_type,
+            layout_name=layout_name,
+            layout_config=resolved_layout,
+        )
         if error:
             return JsonResponse({'error': error}, status=404)
         return JsonResponse({'imagen_url': render_url})
+    except LayoutOwnershipError as e:
+        return JsonResponse({'error': str(e)}, status=403)
+    except LayoutValidationError as e:
+        return JsonResponse({'error': str(e)}, status=400)
     except Exception as e:
         import traceback
         print('ERROR EN SERVICIO DE TEXTO (nombre):')
@@ -1022,16 +1103,46 @@ def render_clan(request):
         ilustrador = (data.get('ilustrador') or '').strip()
         hab_opacity = int(data.get('hab_opacity', 180))
         hab_font_size = int(data.get('hab_font_size', 33))
-        card_type = (data.get('card_type') or 'cripta').strip().lower()
+        card_type = _normalize_card_type(data.get('card_type'))
         layout_name = (data.get('layout_name') or '').strip()
+        layout_id = data.get('layout_id')
+        layout_override = data.get('layout_override')
         imagen_url = data.get('imagen_url', '')
         if not imagen_url:
             return JsonResponse({'error': 'Faltan datos'}, status=400)
 
-        render_url, error = _render_carta(imagen_url, nombre=nombre, clan=clan, senda=senda, disciplinas=disciplinas, simbolos=simbolos, habilidad=habilidad, coste=coste, cripta=cripta, ilustrador=ilustrador, hab_opacity=hab_opacity, hab_font_size=hab_font_size, card_type=card_type, layout_name=layout_name)
+        resolved_layout = _resolve_layout_config(
+            request_user=request.user,
+            card_type=card_type,
+            layout_id=layout_id,
+            layout_name=layout_name,
+            layout_override=layout_override,
+        )
+
+        render_url, error = _render_carta(
+            imagen_url,
+            nombre=nombre,
+            clan=clan,
+            senda=senda,
+            disciplinas=disciplinas,
+            simbolos=simbolos,
+            habilidad=habilidad,
+            coste=coste,
+            cripta=cripta,
+            ilustrador=ilustrador,
+            hab_opacity=hab_opacity,
+            hab_font_size=hab_font_size,
+            card_type=card_type,
+            layout_name=layout_name,
+            layout_config=resolved_layout,
+        )
         if error:
             return JsonResponse({'error': error}, status=404)
         return JsonResponse({'imagen_url': render_url})
+    except LayoutOwnershipError as e:
+        return JsonResponse({'error': str(e)}, status=403)
+    except LayoutValidationError as e:
+        return JsonResponse({'error': str(e)}, status=400)
     except Exception as e:
         import traceback
         print('ERROR EN SERVICIO DE TEXTO (clan):')
@@ -1057,16 +1168,46 @@ def render_texto(request):
         ilustrador = (data.get('ilustrador') or '').strip()
         hab_opacity = int(data.get('hab_opacity', 180))
         hab_font_size = int(data.get('hab_font_size', 33))
-        card_type = (data.get('card_type') or 'cripta').strip().lower()
+        card_type = _normalize_card_type(data.get('card_type'))
         layout_name = (data.get('layout_name') or '').strip()
+        layout_id = data.get('layout_id')
+        layout_override = data.get('layout_override')
         imagen_url = data.get('imagen_url', '')
         if not imagen_url:
             return JsonResponse({'error': 'Faltan datos'}, status=400)
 
-        render_url, error = _render_carta(imagen_url, nombre=nombre, clan=clan, senda=senda, disciplinas=disciplinas, simbolos=simbolos, habilidad=habilidad, coste=coste, cripta=cripta, ilustrador=ilustrador, hab_opacity=hab_opacity, hab_font_size=hab_font_size, card_type=card_type, layout_name=layout_name)
+        resolved_layout = _resolve_layout_config(
+            request_user=request.user,
+            card_type=card_type,
+            layout_id=layout_id,
+            layout_name=layout_name,
+            layout_override=layout_override,
+        )
+
+        render_url, error = _render_carta(
+            imagen_url,
+            nombre=nombre,
+            clan=clan,
+            senda=senda,
+            disciplinas=disciplinas,
+            simbolos=simbolos,
+            habilidad=habilidad,
+            coste=coste,
+            cripta=cripta,
+            ilustrador=ilustrador,
+            hab_opacity=hab_opacity,
+            hab_font_size=hab_font_size,
+            card_type=card_type,
+            layout_name=layout_name,
+            layout_config=resolved_layout,
+        )
         if error:
             return JsonResponse({'error': error}, status=404)
         return JsonResponse({'imagen_url': render_url})
+    except LayoutOwnershipError as e:
+        return JsonResponse({'error': str(e)}, status=403)
+    except LayoutValidationError as e:
+        return JsonResponse({'error': str(e)}, status=400)
     except Exception as e:
         import traceback
         print('ERROR EN SERVICIO DE TEXTO:')

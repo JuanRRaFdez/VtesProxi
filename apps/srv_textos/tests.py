@@ -1,8 +1,13 @@
+from copy import deepcopy
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
 
+from apps.layouts.models import UserLayout
+from apps.layouts.services import load_classic_seed
 from apps.srv_textos import card_catalog
+from apps.srv_textos import views as srv_textos_views
 
 
 class CardCatalogHelpersTests(SimpleTestCase):
@@ -113,3 +118,75 @@ class CardCatalogViewsTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), {'error': 'Carta no encontrada'})
+
+
+class LayoutResolverPriorityTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='resolver-user', password='secret')
+        self.other_user = user_model.objects.create_user(username='resolver-other', password='secret')
+
+    def test_render_uses_layout_override_first(self):
+        selected_layout = UserLayout.objects.create(
+            user=self.user,
+            name='Seleccionado',
+            card_type='cripta',
+            config=load_classic_seed('cripta'),
+            is_default=True,
+        )
+        override = deepcopy(load_classic_seed('cripta'))
+        override['carta']['width'] = 1234
+
+        resolved = srv_textos_views._resolve_layout_config(
+            request_user=self.user,
+            card_type='cripta',
+            layout_id=selected_layout.id,
+            layout_override=override,
+        )
+
+        self.assertEqual(resolved['carta']['width'], 1234)
+
+    def test_render_uses_layout_id_when_provided(self):
+        default_layout = load_classic_seed('cripta')
+        default_layout['carta']['width'] = 800
+        selected_layout = load_classic_seed('cripta')
+        selected_layout['carta']['width'] = 950
+
+        UserLayout.objects.create(
+            user=self.user,
+            name='Default',
+            card_type='cripta',
+            config=default_layout,
+            is_default=True,
+        )
+        selected = UserLayout.objects.create(
+            user=self.user,
+            name='Seleccionado',
+            card_type='cripta',
+            config=selected_layout,
+            is_default=False,
+        )
+
+        resolved = srv_textos_views._resolve_layout_config(
+            request_user=self.user,
+            card_type='cripta',
+            layout_id=selected.id,
+        )
+
+        self.assertEqual(resolved['carta']['width'], 950)
+
+    def test_render_rejects_layout_id_from_other_user(self):
+        other_layout = UserLayout.objects.create(
+            user=self.other_user,
+            name='Ajeno',
+            card_type='cripta',
+            config=load_classic_seed('cripta'),
+            is_default=False,
+        )
+
+        with self.assertRaises(PermissionError):
+            srv_textos_views._resolve_layout_config(
+                request_user=self.user,
+                card_type='cripta',
+                layout_id=other_layout.id,
+            )
