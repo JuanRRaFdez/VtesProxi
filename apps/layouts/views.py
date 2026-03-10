@@ -1,7 +1,7 @@
 import json
 
 from django.contrib.auth.decorators import login_required
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 
@@ -109,4 +109,75 @@ def api_update_config(request):
         return JsonResponse({'error': str(exc)}, status=400)
 
     layout.save(update_fields=['config'])
+    return JsonResponse({'layout': _serialize_layout(layout)})
+
+
+@login_required
+def api_rename(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    payload = _get_payload(request)
+    if payload is None:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    layout_id = payload.get('layout_id')
+    name = (payload.get('name') or '').strip()
+    if not layout_id:
+        return JsonResponse({'error': 'layout_id es obligatorio'}, status=400)
+    if not name:
+        return JsonResponse({'error': 'name es obligatorio'}, status=400)
+
+    layout = get_object_or_404(UserLayout, id=layout_id, user=request.user)
+    layout.name = name
+    try:
+        layout.save(update_fields=['name'])
+    except IntegrityError:
+        return JsonResponse({'error': 'Nombre de layout duplicado'}, status=400)
+
+    return JsonResponse({'layout': _serialize_layout(layout)})
+
+
+@login_required
+def api_delete(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    payload = _get_payload(request)
+    if payload is None:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    layout_id = payload.get('layout_id')
+    if not layout_id:
+        return JsonResponse({'error': 'layout_id es obligatorio'}, status=400)
+
+    layout = get_object_or_404(UserLayout, id=layout_id, user=request.user)
+    layout.delete()
+    return JsonResponse({'ok': True})
+
+
+@login_required
+def api_set_default(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    payload = _get_payload(request)
+    if payload is None:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    layout_id = payload.get('layout_id')
+    if not layout_id:
+        return JsonResponse({'error': 'layout_id es obligatorio'}, status=400)
+
+    layout = get_object_or_404(UserLayout, id=layout_id, user=request.user)
+
+    with transaction.atomic():
+        UserLayout.objects.filter(
+            user=request.user,
+            card_type=layout.card_type,
+            is_default=True,
+        ).exclude(id=layout.id).update(is_default=False)
+        layout.is_default = True
+        layout.save(update_fields=['is_default'])
+
     return JsonResponse({'layout': _serialize_layout(layout)})

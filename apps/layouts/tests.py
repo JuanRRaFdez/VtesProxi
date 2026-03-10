@@ -161,3 +161,67 @@ class LayoutConfigValidationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.layout.refresh_from_db()
         self.assertEqual(self.layout.config['carta']['width'], 900)
+
+
+class LayoutManagementApiTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='manage-user', password='secret')
+        self.layout = UserLayout.objects.create(
+            user=self.user,
+            name='Original',
+            card_type='cripta',
+            config=load_classic_seed('cripta'),
+            is_default=False,
+        )
+
+    def test_rename_layout(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            '/layouts/api/rename',
+            data=json.dumps({'layout_id': self.layout.id, 'name': 'Renombrado'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.name, 'Renombrado')
+
+    def test_delete_layout(self):
+        self.client.force_login(self.user)
+        response = self.client.post(
+            '/layouts/api/delete',
+            data=json.dumps({'layout_id': self.layout.id}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(UserLayout.objects.filter(id=self.layout.id).exists())
+
+    def test_set_default_switches_previous_default_off(self):
+        previous_default = UserLayout.objects.create(
+            user=self.user,
+            name='Default actual',
+            card_type='libreria',
+            config=load_classic_seed('libreria'),
+            is_default=True,
+        )
+        next_default = UserLayout.objects.create(
+            user=self.user,
+            name='Default nuevo',
+            card_type='libreria',
+            config=load_classic_seed('libreria'),
+            is_default=False,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            '/layouts/api/set-default',
+            data=json.dumps({'layout_id': next_default.id}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        previous_default.refresh_from_db()
+        next_default.refresh_from_db()
+        self.assertFalse(previous_default.is_default)
+        self.assertTrue(next_default.is_default)
