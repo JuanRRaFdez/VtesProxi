@@ -333,17 +333,22 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
 
     hab_y = int(card_h * float(lh.get('y_ratio', 0.83) or 0.83))
     hab_max_w = int(card_w * float(lh.get('max_width_ratio', 0.74) or 0.74))
-    hab_box_h = None
+    dynamic_hab_box_h = _compute_habilidad_dynamic_height(
+        habilidad=habilidad,
+        font_size=int(lh.get('font_size', 33) or 33),
+        max_width=hab_max_w,
+        line_spacing=int(lh.get('line_spacing', 4) or 4),
+        padding=int(lh.get('bg_padding', 19) or 19),
+    )
+
+    fixed_hab_box_h = None
     if 'box_bottom_ratio' in lh:
-        hab_box_h = int(card_h * float(lh['box_bottom_ratio'])) - hab_y
-    if hab_box_h is None or hab_box_h <= 0:
-        hab_box_h = _compute_habilidad_dynamic_height(
-            habilidad=habilidad,
-            font_size=int(lh.get('font_size', 33) or 33),
-            max_width=hab_max_w,
-            line_spacing=int(lh.get('line_spacing', 4) or 4),
-            padding=int(lh.get('bg_padding', 19) or 19),
-        )
+        fixed_hab_box_h = int(card_h * float(lh['box_bottom_ratio'])) - hab_y
+
+    if fixed_hab_box_h is None or fixed_hab_box_h <= 0:
+        hab_box_h = dynamic_hab_box_h
+    else:
+        hab_box_h = max(int(fixed_hab_box_h), int(dynamic_hab_box_h))
     habilidad_box = {
         'x': int(lh.get('x', 160) or 160),
         'y': hab_y,

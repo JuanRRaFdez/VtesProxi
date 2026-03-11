@@ -306,3 +306,13 @@ class SymbolsDiscBoxSizingTests(SimpleTestCase):
         metrics = srv_textos_views._compute_symbol_metrics_from_box(box, icon_count=4)
 
         self.assertLessEqual(metrics['size'], 100)
+
+
+class HabilidadDynamicHeightTests(SimpleTestCase):
+    def test_habilidad_height_grows_with_longer_text(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+
+        short_metrics = srv_textos_views._compute_layout_metrics(config, 'cripta', 'corto')
+        long_metrics = srv_textos_views._compute_layout_metrics(config, 'cripta', 'texto ' * 40)
+
+        self.assertGreater(long_metrics['habilidad']['height'], short_metrics['habilidad']['height'])
