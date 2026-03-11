@@ -316,3 +316,15 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
         long_metrics = srv_textos_views._compute_layout_metrics(config, 'cripta', 'texto ' * 40)
 
         self.assertGreater(long_metrics['habilidad']['height'], short_metrics['habilidad']['height'])
+
+
+class GlobalCollisionResolverTests(SimpleTestCase):
+    def test_collision_resolver_moves_elements_up_when_habilidad_grows(self):
+        metrics = {
+            'habilidad': {'box': {'x': 150, 'y': 600, 'width': 400, 'height': 300}},
+            'disciplinas': {'box': {'x': 40, 'y': 680, 'width': 90, 'height': 260}, 'anchor_mode': 'free'},
+        }
+
+        resolved = srv_textos_views._resolve_global_collisions(metrics, card_height=1040)
+
+        self.assertLess(resolved['disciplinas']['box']['y'], 680)

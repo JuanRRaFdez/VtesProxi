@@ -242,6 +242,14 @@ def _boxes_overlap(box_a, box_b):
     return not (ax2 <= bx1 or bx2 <= ax1 or ay2 <= by1 or by2 <= ay1)
 
 
+def _boxes_overlap_vertically(box_a, box_b):
+    ay1 = box_a['y']
+    ay2 = ay1 + box_a['height']
+    by1 = box_b['y']
+    by2 = by1 + box_b['height']
+    return not (ay2 <= by1 or by2 <= ay1)
+
+
 def _resolve_global_collisions(metrics, card_height):
     resolved = deepcopy(metrics)
     habilidad_box = resolved.get('habilidad', {}).get('box')
@@ -249,6 +257,7 @@ def _resolve_global_collisions(metrics, card_height):
         return resolved
 
     priority = ['disciplinas', 'simbolos', 'coste', 'ilustrador']
+    vertical_only = {'disciplinas', 'simbolos', 'coste'}
     for key in priority:
         section = resolved.get(key)
         if not isinstance(section, dict):
@@ -263,7 +272,12 @@ def _resolve_global_collisions(metrics, card_height):
 
         min_y = 0
         max_y = max(0, int(card_height) - box['height'])
-        while _boxes_overlap(box, habilidad_box) and box['y'] > min_y:
+        if key in vertical_only:
+            overlaps = _boxes_overlap_vertically
+        else:
+            overlaps = _boxes_overlap
+
+        while overlaps(box, habilidad_box) and box['y'] > min_y:
             box['y'] -= 1
 
         if box['y'] > max_y:
