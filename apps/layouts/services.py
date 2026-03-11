@@ -72,6 +72,97 @@ def _validate_habilidad_box(habilidad):
                 raise LayoutValidationError('habilidad.bg_color fuera de rango')
 
 
+_TEXT_RULE_DEFAULTS = {
+    'nombre': {
+        'align': 'center',
+        'anchor_mode': 'free',
+        'autoshrink': True,
+        'ellipsis_enabled': True,
+        'min_font_size': 18,
+    },
+    'ilustrador': {
+        'align': 'left',
+        'anchor_mode': 'free',
+        'autoshrink': True,
+        'ellipsis_enabled': True,
+        'min_font_size': 14,
+    },
+}
+
+
+def _coerce_legacy_y(raw_y, card_height):
+    if isinstance(raw_y, bool):
+        return 0
+    if isinstance(raw_y, (int, float)):
+        if isinstance(raw_y, float) and 0 <= raw_y <= 1:
+            return int(card_height * raw_y)
+        return int(raw_y)
+    return 0
+
+
+def _legacy_text_box(section_name, section, card_width, card_height):
+    x = int(section.get('x', 0) or 0)
+    font_size = int(section.get('font_size', 24) or 24)
+
+    if section_name == 'ilustrador':
+        bottom = int(section.get('bottom', 0) or 0)
+        y = max(0, card_height - bottom - int(font_size * 1.2))
+    else:
+        y = _coerce_legacy_y(section.get('y', 0), card_height)
+
+    width = max(40, int(card_width - max(0, x * 2)))
+    height = max(font_size + 8, int(font_size * 1.6))
+    return {
+        'x': x,
+        'y': y,
+        'width': width,
+        'height': height,
+    }
+
+
+def _ensure_text_v2_section(normalized, section_name):
+    section = normalized.get(section_name)
+    if not isinstance(section, dict):
+        return
+
+    carta = normalized.get('carta') or {}
+    card_width = int(carta.get('width', 745) or 745)
+    card_height = int(carta.get('height', 1040) or 1040)
+
+    box = section.get('box')
+    if not isinstance(box, dict):
+        section['box'] = _legacy_text_box(section_name, section, card_width, card_height)
+    else:
+        section['box'] = {
+            'x': int(box.get('x', 0) or 0),
+            'y': int(box.get('y', 0) or 0),
+            'width': max(1, int(box.get('width', card_width) or card_width)),
+            'height': max(1, int(box.get('height', 40) or 40)),
+        }
+
+    rules = section.get('rules')
+    if not isinstance(rules, dict):
+        rules = {}
+        section['rules'] = rules
+
+    for key, default_value in _TEXT_RULE_DEFAULTS.get(section_name, {}).items():
+        rules.setdefault(key, default_value)
+
+
+def normalize_layout_config(card_type, config):
+    if not isinstance(config, dict):
+        raise LayoutValidationError('config debe ser un objeto JSON')
+
+    normalized_card_type = (card_type or '').strip().lower()
+    if normalized_card_type not in ('cripta', 'libreria'):
+        normalized_card_type = 'cripta'
+
+    normalized = deepcopy(config)
+    _ensure_text_v2_section(normalized, 'nombre')
+    _ensure_text_v2_section(normalized, 'ilustrador')
+    return normalized
+
+
 def validate_layout_config(card_type, config):
     if not isinstance(config, dict):
         raise LayoutValidationError('config debe ser un objeto JSON')

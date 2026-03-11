@@ -7,7 +7,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from apps.layouts.models import UserLayout
-from apps.layouts.services import load_classic_seed
+from apps.layouts.services import load_classic_seed, normalize_layout_config
 
 
 class UserLayoutModelTests(TestCase):
@@ -162,6 +162,22 @@ class LayoutConfigValidationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.layout.refresh_from_db()
         self.assertEqual(self.layout.config['carta']['width'], 900)
+
+
+class LayoutConfigBoxSchemaTests(TestCase):
+    def test_normalize_legacy_config_adds_box_for_nombre(self):
+        legacy = load_classic_seed('cripta')
+
+        normalized = normalize_layout_config('cripta', legacy)
+
+        self.assertIn('box', normalized['nombre'])
+        self.assertEqual(normalized['nombre']['box']['x'], legacy['nombre']['x'])
+
+    def test_normalize_applies_text_defaults_for_nombre_and_ilustrador(self):
+        normalized = normalize_layout_config('cripta', load_classic_seed('cripta'))
+
+        self.assertEqual(normalized['nombre']['rules']['align'], 'center')
+        self.assertEqual(normalized['ilustrador']['rules']['align'], 'left')
 
 
 class LayoutManagementApiTests(TestCase):
