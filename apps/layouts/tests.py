@@ -168,6 +168,25 @@ class LayoutConfigValidationTests(TestCase):
         self.layout.refresh_from_db()
         self.assertEqual(self.layout.config['carta']['width'], 900)
 
+    def test_update_config_accepts_v2_payload(self):
+        valid_config = normalize_layout_config('cripta', deepcopy(self.layout.config))
+        valid_config['nombre']['rules']['align'] = 'right'
+        valid_config['nombre']['box']['width'] = 320
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            '/layouts/api/update-config',
+            data=json.dumps({
+                'layout_id': self.layout.id,
+                'config': valid_config,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.layout.refresh_from_db()
+        self.assertEqual(self.layout.config['nombre']['rules']['align'], 'right')
+
 
 class LayoutConfigBoxSchemaTests(TestCase):
     def test_normalize_legacy_config_adds_box_for_nombre(self):

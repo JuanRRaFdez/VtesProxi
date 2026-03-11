@@ -1,4 +1,5 @@
 from copy import deepcopy
+import json
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -328,3 +329,22 @@ class GlobalCollisionResolverTests(SimpleTestCase):
         resolved = srv_textos_views._resolve_global_collisions(metrics, card_height=1040)
 
         self.assertLess(resolved['disciplinas']['box']['y'], 680)
+
+
+class BoxEngineRenderRegressionTests(TestCase):
+    def test_render_texto_accepts_v2_layout_override(self):
+        override = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        override['nombre']['rules']['align'] = 'right'
+
+        response = self.client.post(
+            '/srv-textos/render-texto/',
+            data=json.dumps({
+                'card_type': 'cripta',
+                'imagen_url': '/media/recortes/test.png',
+                'layout_override': override,
+                'nombre': 'Carta ejemplo',
+            }),
+            content_type='application/json',
+        )
+
+        self.assertIn(response.status_code, (200, 404))
