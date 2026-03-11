@@ -1,12 +1,12 @@
 from django.shortcuts import redirect, render
 import requests
 from django.conf import settings
+from apps.layouts.models import UserLayout
 
 # Vista para importar imagen y mostrarla
 
 def importar_imagen(request):
     import os
-    import json
     recorte_url = None
     recorte = request.GET.get('recorte')
     if recorte:
@@ -26,20 +26,28 @@ def importar_imagen(request):
         sendas = [f for f in os.listdir(path_dir) if f.endswith('.png')]
         sendas.sort()
 
-    layouts_json_path = os.path.join(settings.BASE_DIR, 'apps', 'srv_textos', 'layouts.json')
     layout_options = []
-    active_layout = ''
-    if os.path.exists(layouts_json_path):
-        with open(layouts_json_path, encoding='utf-8') as f:
-            layouts_data = json.load(f)
-        layout_options = sorted(list((layouts_data.get('layouts') or {}).keys()))
-        active_layout = layouts_data.get('active', '')
+    active_layout_id = None
+    if request.user.is_authenticated:
+        user_layouts = UserLayout.objects.filter(
+            user=request.user,
+            card_type='cripta',
+        ).order_by('name', 'id')
+        layout_options = [
+            {'id': layout.id, 'name': layout.name, 'is_default': layout.is_default}
+            for layout in user_layouts
+        ]
+        default_layout = next((layout for layout in layout_options if layout['is_default']), None)
+        if default_layout:
+            active_layout_id = default_layout['id']
+        elif layout_options:
+            active_layout_id = layout_options[0]['id']
 
     return render(request, 'cripta/importar_imagen.html', {
         'imagen_url': recorte_url,
         'clanes': clanes,
         'sendas': sendas,
         'layout_options': layout_options,
-        'active_layout': active_layout,
+        'active_layout_id': active_layout_id,
         'card_type': 'cripta',
     })

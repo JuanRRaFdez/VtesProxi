@@ -190,3 +190,62 @@ class LayoutResolverPriorityTests(TestCase):
                 card_type='cripta',
                 layout_id=other_layout.id,
             )
+
+
+class ImportViewsLayoutContextTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username='import-user', password='secret')
+        self.other_user = user_model.objects.create_user(username='import-other', password='secret')
+
+        self.cripta_default = UserLayout.objects.create(
+            user=self.user,
+            name='Cripta default',
+            card_type='cripta',
+            config=load_classic_seed('cripta'),
+            is_default=True,
+        )
+        self.cripta_alt = UserLayout.objects.create(
+            user=self.user,
+            name='Cripta alt',
+            card_type='cripta',
+            config=load_classic_seed('cripta'),
+            is_default=False,
+        )
+        self.libreria_default = UserLayout.objects.create(
+            user=self.user,
+            name='Libreria default',
+            card_type='libreria',
+            config=load_classic_seed('libreria'),
+            is_default=True,
+        )
+        UserLayout.objects.create(
+            user=self.other_user,
+            name='Ajeno',
+            card_type='cripta',
+            config=load_classic_seed('cripta'),
+            is_default=True,
+        )
+
+    def test_cripta_view_uses_user_layout_options(self):
+        self.client.force_login(self.user)
+        response = self.client.get('/cripta/importar-imagen/')
+
+        self.assertEqual(response.status_code, 200)
+        context = response.context
+        self.assertEqual(context['card_type'], 'cripta')
+        self.assertEqual(context['active_layout_id'], self.cripta_default.id)
+
+        option_ids = sorted([item['id'] for item in context['layout_options']])
+        self.assertEqual(option_ids, sorted([self.cripta_default.id, self.cripta_alt.id]))
+
+    def test_libreria_view_uses_user_layout_options(self):
+        self.client.force_login(self.user)
+        response = self.client.get('/libreria/importar-imagen/')
+
+        self.assertEqual(response.status_code, 200)
+        context = response.context
+        self.assertEqual(context['card_type'], 'libreria')
+        self.assertEqual(context['active_layout_id'], self.libreria_default.id)
+        self.assertEqual(len(context['layout_options']), 1)
+        self.assertEqual(context['layout_options'][0]['id'], self.libreria_default.id)
