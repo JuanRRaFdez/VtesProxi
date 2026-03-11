@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
 
 from apps.layouts.models import UserLayout
-from apps.layouts.services import load_classic_seed
+from apps.layouts.services import load_classic_seed, normalize_layout_config
 from apps.srv_textos import card_catalog
 from apps.srv_textos import views as srv_textos_views
 
@@ -269,3 +269,25 @@ class TextInBoxHelpersTests(SimpleTestCase):
         x = srv_textos_views._compute_aligned_x(100, 40, 'center')
 
         self.assertEqual(x, 130)
+
+
+class NameIllustratorBoxRenderTests(TestCase):
+    def test_nombre_uses_box_alignment_and_shadow_toggle(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['nombre']['rules']['align'] = 'right'
+        config['nombre']['shadow']['enabled'] = False
+
+        metrics = srv_textos_views._compute_layout_metrics(config, card_type='cripta', habilidad='')
+
+        self.assertEqual(metrics['nombre']['align'], 'right')
+        self.assertFalse(metrics['nombre']['shadow_enabled'])
+
+    def test_ilustrador_stays_within_box(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+
+        metrics = srv_textos_views._compute_layout_metrics(config, card_type='cripta', habilidad='x')
+
+        self.assertLessEqual(
+            metrics['ilustrador']['text_width'],
+            metrics['ilustrador']['box']['width'],
+        )

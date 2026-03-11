@@ -1,6 +1,7 @@
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.conf import settings
+from copy import deepcopy
 import os
 import json
 import shutil
@@ -11,6 +12,7 @@ from apps.layouts.services import (
     LayoutOwnershipError,
     LayoutValidationError,
     get_user_layout_config,
+    normalize_layout_config,
     validate_layout_config,
 )
 from .card_catalog import search_card_suggestions, get_card_autocomplete
@@ -177,6 +179,248 @@ def _compute_aligned_x(box_x, text_width, align, box_width=100):
     if align == 'center':
         return start_x + max(0, (box_width - text_width) // 2)
     return start_x
+
+
+def _clamp_box(box, default_box):
+    source = box if isinstance(box, dict) else {}
+    return {
+        'x': int(source.get('x', default_box['x'])),
+        'y': int(source.get('y', default_box['y'])),
+        'width': max(1, int(source.get('width', default_box['width']))),
+        'height': max(1, int(source.get('height', default_box['height']))),
+    }
+
+
+def _compute_habilidad_dynamic_height(habilidad, font_size, max_width, line_spacing, padding):
+    safe_text = str(habilidad or '').strip()
+    if not safe_text:
+        return max(1, int(font_size + padding))
+
+    if max_width <= 0:
+        return max(1, int(font_size + padding))
+
+    approx_chars_per_line = max(1, int(max_width / max(1, font_size * 0.55)))
+    line_count = 0
+    for block in safe_text.split('\n'):
+        block = block.strip()
+        if not block:
+            line_count += 1
+            continue
+        wrapped = (len(block) + approx_chars_per_line - 1) // approx_chars_per_line
+        line_count += max(1, wrapped)
+
+    return int((line_count * (font_size + line_spacing)) + max(0, padding))
+
+
+def _compute_disc_metrics_from_box(box, icon_count):
+    normalized_count = max(1, int(icon_count or 0))
+    size_by_width = int(box['width'])
+    size_by_height = int(box['height'] / normalized_count)
+    size = max(1, min(size_by_width, size_by_height))
+    spacing = max(1, int(box['height'] / normalized_count))
+    return size, spacing
+
+
+def _compute_symbol_metrics_from_box(box, icon_count):
+    size, spacing = _compute_disc_metrics_from_box(box, icon_count)
+    return {'size': size, 'spacing': spacing}
+
+
+def _boxes_overlap(box_a, box_b):
+    if not box_a or not box_b:
+        return False
+    ax1 = box_a['x']
+    ay1 = box_a['y']
+    ax2 = ax1 + box_a['width']
+    ay2 = ay1 + box_a['height']
+
+    bx1 = box_b['x']
+    by1 = box_b['y']
+    bx2 = bx1 + box_b['width']
+    by2 = by1 + box_b['height']
+
+    return not (ax2 <= bx1 or bx2 <= ax1 or ay2 <= by1 or by2 <= ay1)
+
+
+def _resolve_global_collisions(metrics, card_height):
+    resolved = deepcopy(metrics)
+    habilidad_box = resolved.get('habilidad', {}).get('box')
+    if not isinstance(habilidad_box, dict):
+        return resolved
+
+    priority = ['disciplinas', 'simbolos', 'coste', 'ilustrador']
+    for key in priority:
+        section = resolved.get(key)
+        if not isinstance(section, dict):
+            continue
+        box = section.get('box')
+        if not isinstance(box, dict):
+            continue
+
+        anchor_mode = section.get('anchor_mode', 'free')
+        if anchor_mode == 'bottom_locked':
+            continue
+
+        min_y = 0
+        max_y = max(0, int(card_height) - box['height'])
+        while _boxes_overlap(box, habilidad_box) and box['y'] > min_y:
+            box['y'] -= 1
+
+        if box['y'] > max_y:
+            box['y'] = max_y
+        if box['y'] < min_y:
+            box['y'] = min_y
+
+    return resolved
+
+
+def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='', ilustrador='', disciplinas=None, simbolos=None):
+    normalized_card_type = _normalize_card_type(card_type)
+    lay = normalize_layout_config(normalized_card_type, config)
+    lc = lay['carta']
+    card_w = int(lc['width'])
+    card_h = int(lc['height'])
+
+    layout_scope = lay.get('libreria', {}) if normalized_card_type == 'libreria' else lay
+
+    ln = layout_scope.get('nombre') or lay.get('nombre') or {}
+    lil = layout_scope.get('ilustrador') or lay.get('ilustrador') or {}
+    ld = layout_scope.get('disciplinas') or lay.get('disciplinas') or {}
+    lsi = layout_scope.get('simbolos') if normalized_card_type == 'libreria' else None
+    lh = layout_scope.get('habilidad') or lay.get('habilidad') or {}
+    lco = layout_scope.get('coste') or lay.get('coste') or {}
+
+    ln_y = ln.get('y', 0)
+    if isinstance(ln_y, float):
+        ln_default_y = int(card_h * ln_y)
+    else:
+        ln_default_y = int(ln_y or 0)
+
+    nombre_box = _clamp_box(ln.get('box'), {
+        'x': int(ln.get('x', 0) or 0),
+        'y': ln_default_y,
+        'width': card_w,
+        'height': max(1, int(ln.get('font_size', 40) or 40)),
+    })
+    nombre_rules = ln.get('rules') if isinstance(ln.get('rules'), dict) else {}
+    nombre_align = nombre_rules.get('align', 'left')
+    nombre_fit = _fit_text_to_box(
+        text=nombre,
+        font_path=ln.get('font_path', 'static/fonts/MatrixExtraBold.otf'),
+        start_font_size=ln.get('font_size', 40),
+        min_font_size=nombre_rules.get('min_font_size', 18),
+        max_width=nombre_box['width'],
+        ellipsis_enabled=nombre_rules.get('ellipsis_enabled', True),
+    )
+
+    il_box_default_y = max(0, card_h - int(lil.get('bottom', 0) or 0) - int(lil.get('font_size', 24) or 24))
+    il_box = _clamp_box(lil.get('box'), {
+        'x': int(lil.get('x', 45) or 45),
+        'y': il_box_default_y,
+        'width': max(1, card_w - 90),
+        'height': max(1, int(lil.get('font_size', 24) or 24) + 8),
+    })
+    il_rules = lil.get('rules') if isinstance(lil.get('rules'), dict) else {}
+    il_align = il_rules.get('align', 'left')
+    il_fit = _fit_text_to_box(
+        text=ilustrador,
+        font_path='static/fonts/Gill Sans.otf',
+        start_font_size=lil.get('font_size', 24),
+        min_font_size=il_rules.get('min_font_size', 14),
+        max_width=il_box['width'],
+        ellipsis_enabled=il_rules.get('ellipsis_enabled', True),
+    )
+
+    hab_y = int(card_h * float(lh.get('y_ratio', 0.83) or 0.83))
+    hab_max_w = int(card_w * float(lh.get('max_width_ratio', 0.74) or 0.74))
+    hab_box_h = None
+    if 'box_bottom_ratio' in lh:
+        hab_box_h = int(card_h * float(lh['box_bottom_ratio'])) - hab_y
+    if hab_box_h is None or hab_box_h <= 0:
+        hab_box_h = _compute_habilidad_dynamic_height(
+            habilidad=habilidad,
+            font_size=int(lh.get('font_size', 33) or 33),
+            max_width=hab_max_w,
+            line_spacing=int(lh.get('line_spacing', 4) or 4),
+            padding=int(lh.get('bg_padding', 19) or 19),
+        )
+    habilidad_box = {
+        'x': int(lh.get('x', 160) or 160),
+        'y': hab_y,
+        'width': max(1, hab_max_w),
+        'height': max(1, hab_box_h),
+    }
+
+    disc_box = _clamp_box(ld.get('box') if isinstance(ld, dict) else None, {
+        'x': int(ld.get('x', 0) or 0) if isinstance(ld, dict) else 0,
+        'y': max(0, card_h - int(ld.get('bottom', 100) or 100) - int(ld.get('size', 64) or 64)) if isinstance(ld, dict) else 0,
+        'width': int(ld.get('size', 64) or 64) if isinstance(ld, dict) else 64,
+        'height': int((ld.get('spacing', 80) or 80) * max(1, len(disciplinas or []))) if isinstance(ld, dict) else 200,
+    })
+    disc_size, disc_spacing = _compute_disc_metrics_from_box(disc_box, icon_count=len(disciplinas or []))
+
+    simbolos_box = None
+    simbolos_metrics = None
+    if normalized_card_type == 'libreria' and isinstance(lsi, dict):
+        simbolos_box = _clamp_box(lsi.get('box'), {
+            'x': int(lsi.get('x', 0) or 0),
+            'y': int(lsi.get('y', 0) or 0),
+            'width': int(lsi.get('size', 64) or 64),
+            'height': int((lsi.get('spacing', 80) or 80) * max(1, len(simbolos or []))),
+        })
+        simbolos_metrics = _compute_symbol_metrics_from_box(simbolos_box, icon_count=len(simbolos or []))
+
+    coste_size = int(lco.get('size', 64) or 64) if isinstance(lco, dict) else 64
+    coste_bottom = int(lco.get('bottom', 40) or 40) if isinstance(lco, dict) else 40
+    coste_x = int(lco.get('left', card_w - coste_size - int(lco.get('right', 40) or 40))) if isinstance(lco, dict) else card_w - coste_size - 40
+    coste_box = {
+        'x': max(0, coste_x),
+        'y': max(0, card_h - coste_bottom - coste_size),
+        'width': max(1, coste_size),
+        'height': max(1, coste_size),
+    }
+
+    metrics = {
+        'card': {'width': card_w, 'height': card_h},
+        'nombre': {
+            'box': nombre_box,
+            'align': nombre_align,
+            'shadow_enabled': bool((ln.get('shadow') or {}).get('enabled', False)),
+            'fit': nombre_fit,
+            'text_width': nombre_fit['width'],
+        },
+        'ilustrador': {
+            'box': il_box,
+            'align': il_align,
+            'shadow_enabled': bool((lil.get('shadow') or {}).get('enabled', False)),
+            'fit': il_fit,
+            'text_width': il_fit['width'],
+            'anchor_mode': il_rules.get('anchor_mode', 'free'),
+        },
+        'habilidad': {
+            'box': habilidad_box,
+            'height': habilidad_box['height'],
+        },
+        'disciplinas': {
+            'box': disc_box,
+            'size': disc_size,
+            'spacing': disc_spacing,
+            'anchor_mode': (ld.get('rules') or {}).get('anchor_mode', 'free') if isinstance(ld, dict) else 'free',
+        },
+        'coste': {
+            'box': coste_box,
+            'anchor_mode': 'bottom_locked',
+        },
+    }
+    if simbolos_box is not None and simbolos_metrics is not None:
+        metrics['simbolos'] = {
+            'box': simbolos_box,
+            'size': simbolos_metrics['size'],
+            'spacing': simbolos_metrics['spacing'],
+            'anchor_mode': ((lsi.get('rules') or {}).get('anchor_mode', 'free') if isinstance(lsi, dict) else 'free'),
+        }
+
+    return _resolve_global_collisions(metrics, card_height=card_h)
 
 
 # --- Helper: carga fuentes de habilidad ---
@@ -826,6 +1070,15 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     lco = layout_scope.get('coste') or lay.get('coste')
     lcr = lay.get('cripta') if card_type == 'cripta' else None
     lil = layout_scope.get('ilustrador') or lay.get('ilustrador')
+    metrics = _compute_layout_metrics(
+        lay,
+        card_type=card_type,
+        habilidad=habilidad,
+        nombre=nombre,
+        ilustrador=ilustrador,
+        disciplinas=disciplinas,
+        simbolos=simbolos,
+    )
 
     card_w = lc['width']
     card_h = lc['height']
@@ -882,21 +1135,30 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
 
     # 1) Nombre (independiente de los símbolos)
     if nombre:
-        font_path = os.path.join(settings.BASE_DIR, ln['font_path'])
-        if not os.path.exists(font_path):
-            raise FileNotFoundError(f"No se encontró la fuente en {font_path}")
-        font = ImageFont.truetype(font_path, ln['font_size'])
-        draw = ImageDraw.Draw(image)
+        nombre_metrics = metrics.get('nombre', {})
+        fitted = nombre_metrics.get('fit') or {}
+        rendered_name = fitted.get('text', nombre)
+        font = fitted.get('font')
+        if font is None:
+            font_path = os.path.join(settings.BASE_DIR, ln['font_path'])
+            if not os.path.exists(font_path):
+                raise FileNotFoundError(f"No se encontró la fuente en {font_path}")
+            font = ImageFont.truetype(font_path, ln['font_size'])
+        text_width = fitted.get('width')
+        if text_width is None:
+            text_width = _measure_text_width(font, rendered_name)
 
-        x = ln['x']
-        y_cfg = ln['y']
-        y = int(image.height * y_cfg) if isinstance(y_cfg, float) else int(y_cfg)
+        nombre_box = nombre_metrics.get('box') or ln.get('box') or {'x': ln.get('x', 0), 'y': ln.get('y', 0), 'width': card_w, 'height': ln.get('font_size', 40)}
+        align = nombre_metrics.get('align', 'left')
+        draw = ImageDraw.Draw(image)
+        x = _compute_aligned_x(nombre_box['x'], text_width, align, nombre_box['width'])
+        y = int(nombre_box['y']) + max(0, (int(nombre_box['height']) - int(fitted.get('font_size', ln.get('font_size', 40)))) // 2)
 
         shadow = ln.get('shadow', {})
-        if shadow.get('enabled', False):
+        if nombre_metrics.get('shadow_enabled', shadow.get('enabled', False)):
             for dx, dy in shadow.get('offsets', []):
-                draw.text((x + dx, y + dy), nombre, font=font, fill=shadow.get('color', 'black'))
-        draw.text((x, y), nombre, font=font, fill=ln.get('color', 'white'))
+                draw.text((x + dx, y + dy), rendered_name, font=font, fill=shadow.get('color', 'black'))
+        draw.text((x, y), rendered_name, font=font, fill=ln.get('color', 'white'))
 
     # 2) Símbolo de clan (posición fija, independiente del nombre)
     if clan:
@@ -1022,14 +1284,28 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     # 8) Ilustrador (centrado, pegado a la parte inferior de la carta)
     if ilustrador and lil:
         try:
-            _, font_normal = _load_hab_fonts(il_font_size)
-            il_bbox = font_normal.getbbox(ilustrador)
-            il_w = il_bbox[2] - il_bbox[0]
-            il_h = il_bbox[3] - il_bbox[1]
-            il_x = (image.width - il_w) // 2
-            il_y = image.height - il_h - il_bottom
+            ilustrador_metrics = metrics.get('ilustrador', {})
+            il_fit = ilustrador_metrics.get('fit') or {}
+            rendered_il = il_fit.get('text', ilustrador)
+            font_normal = il_fit.get('font')
+            if font_normal is None:
+                _, font_normal = _load_hab_fonts(il_font_size)
+            il_w = il_fit.get('width')
+            if il_w is None:
+                il_bbox = font_normal.getbbox(rendered_il)
+                il_w = il_bbox[2] - il_bbox[0]
+
+            il_box = ilustrador_metrics.get('box') or lil.get('box') or {
+                'x': 45,
+                'y': image.height - il_bottom - il_font_size,
+                'width': max(1, image.width - 90),
+                'height': il_font_size + 8,
+            }
+            il_align = ilustrador_metrics.get('align', 'left')
+            il_x = _compute_aligned_x(il_box['x'], il_w, il_align, il_box['width'])
+            il_y = int(il_box['y']) + max(0, (int(il_box['height']) - int(il_fit.get('font_size', il_font_size))) // 2)
             draw_il = ImageDraw.Draw(image)
-            draw_il.text((il_x, il_y), ilustrador, font=font_normal, fill=lil['color'])
+            draw_il.text((il_x, il_y), rendered_il, font=font_normal, fill=lil['color'])
         except Exception as e:
             print(f'Error renderizando ilustrador: {e}')
 
