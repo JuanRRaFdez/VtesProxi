@@ -35,7 +35,7 @@ Cada elemento editable tendra:
 
 Campos clave:
 - `nombre.rules.align`, `ilustrador.rules.align`: `left|center|right`
-- `nombre.rules.autoshrink_enabled`, `ilustrador.rules.autoshrink_enabled`: `bool`
+- `nombre.rules.autoshrink`, `ilustrador.rules.autoshrink`: `bool`
 - `nombre.rules.min_font_size`, `ilustrador.rules.min_font_size`: `int`
 - `nombre.rules.ellipsis_enabled`, `ilustrador.rules.ellipsis_enabled`: `bool`
 - `nombre.shadow.enabled` editable (reborde/sombra negro on/off)
@@ -53,14 +53,13 @@ Campos clave:
 - Etapa E: render final.
 
 ### 4) Politica anti-solape
-- Solape detectado por interseccion de cajas 2D + `collision_gap`.
+- Solape detectado por etapas:
+  - `disciplinas`, `simbolos`, `coste`: criterio vertical respecto a `habilidad`.
+  - `ilustrador`: interseccion 2D de cajas.
 - Si `habilidad` crece, se empujan elementos hacia arriba en orden:
   1. `disciplinas`, `simbolos`
   2. `coste`
-  3. `cripta`
-  4. `ilustrador`
-  5. `clan`, `senda`
-  6. `nombre` (ultima opcion)
+  3. `ilustrador`
 - Se respetan anclajes en lo posible; si no hay espacio fisico se hace clamp y se emite warning de preview.
 
 ### 5) Texto en caja (`nombre` / `ilustrador`)

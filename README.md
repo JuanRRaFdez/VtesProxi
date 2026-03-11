@@ -27,6 +27,38 @@ Los endpoints de `srv_textos` resuelven el layout en este orden:
 3. layout default del usuario para el tipo de carta
 4. fallback `classic` desde `apps/srv_textos/layouts.json`
 
+## Layout Box Engine v2
+
+El motor de render usa un schema v2 compatible con layouts legacy.
+
+### Campos principales por elemento
+- `box`: `{x, y, width, height}`
+- `rules.align`: `left | center | right` (texto)
+- `rules.anchor_mode`: `free | top_locked | bottom_locked`
+- `rules.autoshrink`: `true | false`
+- `rules.min_font_size`: entero
+- `rules.ellipsis_enabled`: `true | false`
+- `shadow.enabled`: sombra de texto on/off
+
+### Compatibilidad
+- Los layouts antiguos se normalizan automaticamente con `normalize_layout_config`.
+- `validate_layout_config` acepta legacy y v2, validando rangos/enums de `box` y `rules`.
+
+### Comportamiento de render
+- `nombre` e `ilustrador` se ajustan al `box` con alineacion configurable.
+- Si el texto no cabe: reduce fuente hasta `min_font_size`; si sigue sin caber y hay ellipsis, truncado con `...`.
+- `disciplinas` y `simbolos` escalan tamano/espaciado a partir del `box`.
+- `habilidad` calcula altura dinamica por contenido y el resolver global mueve elementos anclables para evitar solapes.
+
+### Editor visual
+En `/layouts/`, ademas de `x/y/width/height`, el panel permite editar:
+- `align`
+- `anchor_mode`
+- `min_font_size`
+- `autoshrink`
+- `ellipsis_enabled`
+- `shadow.enabled`
+
 ## Verificacion rapida
 
 Usar el interprete del entorno virtual:
