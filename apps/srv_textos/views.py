@@ -109,6 +109,76 @@ def _resolve_imagen_path(imagen_url):
     return os.path.join(settings.MEDIA_ROOT, imagen_path)
 
 
+def _resolve_font_path(font_path):
+    if not font_path:
+        raise ValueError('font_path requerido')
+    if os.path.isabs(font_path):
+        return font_path
+    return os.path.join(settings.BASE_DIR, font_path)
+
+
+def _measure_text_width(font, text):
+    bbox = font.getbbox(text or '')
+    return bbox[2] - bbox[0]
+
+
+def _fit_text_to_box(text, font_path, start_font_size, min_font_size, max_width, ellipsis_enabled=True):
+    safe_text = str(text or '')
+    max_width = max(1, int(max_width))
+    start_size = max(1, int(start_font_size))
+    min_size = max(1, int(min_font_size))
+    if start_size < min_size:
+        start_size = min_size
+
+    resolved_font_path = _resolve_font_path(font_path)
+
+    for font_size in range(start_size, min_size - 1, -1):
+        font = ImageFont.truetype(resolved_font_path, font_size)
+        width = _measure_text_width(font, safe_text)
+        if width <= max_width:
+            return {
+                'text': safe_text,
+                'font_size': font_size,
+                'width': width,
+                'font': font,
+            }
+
+    font = ImageFont.truetype(resolved_font_path, min_size)
+    fitted_text = safe_text
+    fitted_width = _measure_text_width(font, fitted_text)
+
+    if ellipsis_enabled and safe_text:
+        ellipsis = '...'
+        trimmed = safe_text
+        while trimmed:
+            candidate = trimmed + ellipsis
+            candidate_width = _measure_text_width(font, candidate)
+            if candidate_width <= max_width:
+                fitted_text = candidate
+                fitted_width = candidate_width
+                break
+            trimmed = trimmed[:-1]
+
+    return {
+        'text': fitted_text,
+        'font_size': min_size,
+        'width': fitted_width,
+        'font': font,
+    }
+
+
+def _compute_aligned_x(box_x, text_width, align, box_width=100):
+    start_x = int(box_x)
+    text_width = max(0, int(text_width))
+    box_width = max(1, int(box_width))
+
+    if align == 'right':
+        return start_x + max(0, box_width - text_width)
+    if align == 'center':
+        return start_x + max(0, (box_width - text_width) // 2)
+    return start_x
+
+
 # --- Helper: carga fuentes de habilidad ---
 def _load_hab_fonts(size):
     fonts_dir = os.path.join(settings.BASE_DIR, 'static', 'fonts')

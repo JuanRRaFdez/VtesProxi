@@ -249,3 +249,23 @@ class ImportViewsLayoutContextTests(TestCase):
         self.assertEqual(context['active_layout_id'], self.libreria_default.id)
         self.assertEqual(len(context['layout_options']), 1)
         self.assertEqual(context['layout_options'][0]['id'], self.libreria_default.id)
+
+
+class TextInBoxHelpersTests(SimpleTestCase):
+    def test_fit_text_shrinks_then_ellipsis(self):
+        fitted = srv_textos_views._fit_text_to_box(
+            text='ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+            font_path='static/fonts/MatrixExtraBold.otf',
+            start_font_size=50,
+            min_font_size=18,
+            max_width=80,
+            ellipsis_enabled=True,
+        )
+
+        self.assertLessEqual(fitted['width'], 80)
+        self.assertTrue(fitted['text'].endswith('...'))
+
+    def test_horizontal_alignment_center(self):
+        x = srv_textos_views._compute_aligned_x(100, 40, 'center')
+
+        self.assertEqual(x, 130)
