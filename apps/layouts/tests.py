@@ -1,5 +1,6 @@
 from copy import deepcopy
 import json
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
@@ -236,3 +237,62 @@ class LayoutEditorTemplateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="layout-stage"')
         self.assertContains(response, 'id="layout-properties"')
+
+
+class EndToEndLayoutFlowTests(TestCase):
+    def test_user_can_create_edit_set_default_and_render_with_layout(self):
+        user = get_user_model().objects.create_user(username='e2e-user', password='secret')
+        self.client.force_login(user)
+
+        create_response = self.client.post(
+            '/layouts/api/create',
+            data=json.dumps({'name': 'Flujo E2E', 'card_type': 'cripta'}),
+            content_type='application/json',
+        )
+        self.assertEqual(create_response.status_code, 201)
+        layout_id = create_response.json()['layout']['id']
+
+        detail_response = self.client.get(f'/layouts/api/detail/{layout_id}')
+        self.assertEqual(detail_response.status_code, 200)
+        config = detail_response.json()['layout']['config']
+        config['carta']['width'] = 910
+
+        update_response = self.client.post(
+            '/layouts/api/update-config',
+            data=json.dumps({'layout_id': layout_id, 'config': config}),
+            content_type='application/json',
+        )
+        self.assertEqual(update_response.status_code, 200)
+
+        default_response = self.client.post(
+            '/layouts/api/set-default',
+            data=json.dumps({'layout_id': layout_id}),
+            content_type='application/json',
+        )
+        self.assertEqual(default_response.status_code, 200)
+
+        with patch('apps.srv_textos.views._render_carta', return_value=('/media/render/e2e.png', None)) as mock_render:
+            render_response = self.client.post(
+                '/srv-textos/render-texto/',
+                data=json.dumps({
+                    'card_type': 'cripta',
+                    'layout_id': layout_id,
+                    'layout_name': '',
+                    'imagen_url': '/media/recortes/e2e.png',
+                    'nombre': 'Carta',
+                    'clan': '',
+                    'senda': '',
+                    'disciplinas': [],
+                    'simbolos': [],
+                    'habilidad': '',
+                    'coste': '',
+                    'cripta': '',
+                    'ilustrador': '',
+                }),
+                content_type='application/json',
+            )
+
+        self.assertEqual(render_response.status_code, 200)
+        self.assertEqual(render_response.json()['imagen_url'], '/media/render/e2e.png')
+        self.assertEqual(mock_render.call_count, 1)
+        self.assertEqual(mock_render.call_args.kwargs['layout_config']['carta']['width'], 910)
