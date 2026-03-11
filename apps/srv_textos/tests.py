@@ -446,6 +446,35 @@ class SymbolsDiscBoxSizingTests(SimpleTestCase):
 
 
 class HabilidadDynamicHeightTests(SimpleTestCase):
+    def test_cripta_dynamic_habilidad_uses_effective_render_font_size(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['habilidad']['box'] = {
+            'x': 160,
+            'y': 700,
+            'width': 420,
+            'height': 160,
+        }
+
+        small_font_metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'cripta',
+            'Texto de habilidad suficientemente largo para ocupar varias lineas',
+            dynamic_habilidad_from_bottom=True,
+            hab_font_size=20,
+        )
+        large_font_metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'cripta',
+            'Texto de habilidad suficientemente largo para ocupar varias lineas',
+            dynamic_habilidad_from_bottom=True,
+            hab_font_size=50,
+        )
+
+        self.assertGreater(
+            large_font_metrics['habilidad']['used_box']['height'],
+            small_font_metrics['habilidad']['used_box']['height'],
+        )
+
     def test_habilidad_box_without_flag_remains_fixed(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))
         config['habilidad']['box'] = {

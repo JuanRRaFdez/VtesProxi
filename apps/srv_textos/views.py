@@ -367,7 +367,7 @@ def _resolve_global_collisions(metrics, card_height):
     return resolved
 
 
-def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='', ilustrador='', disciplinas=None, simbolos=None, dynamic_habilidad_from_bottom=False):
+def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='', ilustrador='', disciplinas=None, simbolos=None, dynamic_habilidad_from_bottom=False, hab_font_size=None):
     normalized_card_type = _normalize_card_type(card_type)
     raw_lay = config if isinstance(config, dict) else {}
     lay = normalize_layout_config(normalized_card_type, config)
@@ -438,6 +438,7 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         ellipsis_enabled=True,
     )
 
+    layout_hab_font_size = int(lh.get('font_size', 33) or 33)
     hab_default_y = int(card_h * float(lh.get('y_ratio', 0.83) or 0.83))
     hab_default_w = int(card_w * float(lh.get('max_width_ratio', 0.74) or 0.74))
     has_habilidad_box = isinstance(raw_lh.get('box'), dict)
@@ -445,20 +446,24 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         'x': int(lh.get('x', 160) or 160),
         'y': hab_default_y,
         'width': max(1, hab_default_w),
-        'height': max(1, int(lh.get('font_size', 33) or 33)),
+        'height': max(1, layout_hab_font_size),
     })
-    dynamic_hab_box_h = _compute_habilidad_dynamic_height(
-        habilidad=habilidad,
-        font_size=int(lh.get('font_size', 33) or 33),
-        max_width=habilidad_box['width'],
-        line_spacing=int(lh.get('line_spacing', 4) or 4),
-        padding=int(lh.get('bg_padding', 19) or 19),
-    )
 
     is_dynamic_bottom_anchor = (
         bool(dynamic_habilidad_from_bottom)
         and normalized_card_type == 'cripta'
         and has_habilidad_box
+    )
+    effective_hab_font_size = layout_hab_font_size
+    if is_dynamic_bottom_anchor and hab_font_size is not None:
+        effective_hab_font_size = max(20, min(int(hab_font_size), 80))
+
+    dynamic_hab_box_h = _compute_habilidad_dynamic_height(
+        habilidad=habilidad,
+        font_size=effective_hab_font_size,
+        max_width=habilidad_box['width'],
+        line_spacing=int(lh.get('line_spacing', 4) or 4),
+        padding=int(lh.get('bg_padding', 19) or 19),
     )
 
     if is_dynamic_bottom_anchor:
@@ -1257,6 +1262,7 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
         disciplinas=disciplinas,
         simbolos=simbolos,
         dynamic_habilidad_from_bottom=dynamic_habilidad_from_bottom,
+        hab_font_size=hab_font_size,
     )
 
     card_w = lc['width']
