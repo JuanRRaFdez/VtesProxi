@@ -291,3 +291,18 @@ class NameIllustratorBoxRenderTests(TestCase):
             metrics['ilustrador']['text_width'],
             metrics['ilustrador']['box']['width'],
         )
+
+
+class SymbolsDiscBoxSizingTests(SimpleTestCase):
+    def test_disciplines_size_scales_from_box_width(self):
+        box = {'x': 10, 'y': 100, 'width': 120, 'height': 280}
+        size, spacing = srv_textos_views._compute_disc_metrics_from_box(box, icon_count=3)
+
+        self.assertLessEqual(size, 120)
+        self.assertGreater(spacing, 0)
+
+    def test_symbols_do_not_overflow_box(self):
+        box = {'x': 10, 'y': 100, 'width': 100, 'height': 300}
+        metrics = srv_textos_views._compute_symbol_metrics_from_box(box, icon_count=4)
+
+        self.assertLessEqual(metrics['size'], 100)

@@ -1096,16 +1096,20 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
         senda_x = ls['x']
         senda_y = ls['y']
 
-    if lsi:
-        simbolos_size = lsi['size']
-        simbolos_x = lsi['x']
-        simbolos_y = lsi['y']
-        simbolos_spacing = lsi['spacing']
+    simbolos_metrics = metrics.get('simbolos') or {}
+    simbolos_box = simbolos_metrics.get('box') or {}
+    simbolos_size = int(simbolos_metrics.get('size', lsi.get('size', 64) if lsi else 64))
+    simbolos_x = int(simbolos_box.get('x', lsi.get('x', 0) if lsi else 0))
+    simbolos_y = int(simbolos_box.get('y', lsi.get('y', 0) if lsi else 0))
+    simbolos_spacing = int(simbolos_metrics.get('spacing', lsi.get('spacing', 80) if lsi else 80))
+    simbolos_box_bottom = simbolos_y + int(simbolos_box.get('height', simbolos_size * max(1, len(simbolos or []))))
 
-    disc_size    = ld['size']
-    disc_x       = ld['x']
-    disc_bottom  = ld['bottom']
-    disc_spacing = ld['spacing']
+    disc_metrics = metrics.get('disciplinas') or {}
+    disc_box = disc_metrics.get('box') or {}
+    disc_size = int(disc_metrics.get('size', ld['size']))
+    disc_spacing = int(disc_metrics.get('spacing', ld['spacing']))
+    disc_x = int(disc_box.get('x', ld['x']))
+    disc_bottom_limit = int(disc_box.get('y', image.height - ld['bottom'] - disc_size)) + int(disc_box.get('height', disc_size * max(1, len(disciplinas or []))))
 
     default_hab_font_size = int(lh['font_size'])
     if hab_font_size is None:
@@ -1202,6 +1206,8 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
 
             if os.path.exists(sym_path):
                 try:
+                    if y_top + simbolos_size > simbolos_box_bottom:
+                        break
                     sym_img = _load_symbol(sym_path, simbolos_size)
                     image.alpha_composite(sym_img, (simbolos_x, y_top))
                     y_top += simbolos_spacing
@@ -1241,8 +1247,10 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
         # Se invierten porque pintamos de abajo a arriba: la última pintada queda más alta
         all_discs = list(reversed(disc_sup_images)) + list(reversed(disc_inf_images))
         if all_discs:
-            y_bottom = image.height - disc_bottom - disc_size
+            y_bottom = disc_bottom_limit - disc_size
             for disc_img in all_discs:
+                if y_bottom < disc_box.get('y', 0):
+                    break
                 image.alpha_composite(disc_img, (disc_x, y_bottom))
                 y_bottom -= disc_spacing
 
