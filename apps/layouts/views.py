@@ -1,5 +1,7 @@
 import json
+import os
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.http import JsonResponse
@@ -7,6 +9,23 @@ from django.shortcuts import get_object_or_404, render
 
 from apps.layouts.models import UserLayout
 from apps.layouts.services import LayoutValidationError, load_classic_seed, validate_layout_config
+from apps.srv_textos.card_catalog import get_card_autocomplete
+from apps.srv_textos.views import _render_carta_from_path
+
+
+FIXED_LAYOUT_PREVIEWS = {
+    'cripta': {
+        'card_name': 'Mimir',
+        'image_path': 'static/layouts/images/Mimir.png',
+        'path': 'caine.png',
+        'illustrator': 'Crafted with AI',
+    },
+    'libreria': {
+        'card_name': '.44 Magnum',
+        'image_path': 'static/layouts/images/44. magnum.png',
+        'illustrator': 'Crafted with AI',
+    },
+}
 
 
 @login_required
@@ -91,6 +110,53 @@ def api_create(request):
         return JsonResponse({'error': 'Nombre de layout duplicado'}, status=400)
 
     return JsonResponse({'layout': _serialize_layout(layout)}, status=201)
+
+
+@login_required
+def api_preview(request):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método no permitido'}, status=405)
+
+    payload = _get_payload(request)
+    if payload is None:
+        return JsonResponse({'error': 'JSON inválido'}, status=400)
+
+    card_type = (payload.get('card_type') or '').strip().lower()
+    layout_config = payload.get('layout_config')
+    if card_type not in FIXED_LAYOUT_PREVIEWS:
+        return JsonResponse({'error': 'card_type inválido'}, status=400)
+    if layout_config is None:
+        return JsonResponse({'error': 'layout_config es obligatorio'}, status=400)
+
+    try:
+        validated_layout = validate_layout_config(card_type, layout_config)
+    except LayoutValidationError as exc:
+        return JsonResponse({'error': str(exc)}, status=400)
+
+    preview = FIXED_LAYOUT_PREVIEWS[card_type]
+    preview_payload = get_card_autocomplete(card_type, preview['card_name'])
+    if preview_payload is None:
+        return JsonResponse({'error': 'Carta de preview no encontrada'}, status=404)
+
+    imagen_abspath = os.path.join(settings.BASE_DIR, preview['image_path'])
+    render_url, error = _render_carta_from_path(
+        imagen_abspath=imagen_abspath,
+        nombre=preview_payload.get('nombre', preview['card_name']),
+        clan=preview_payload.get('clan', ''),
+        senda=preview.get('path', preview_payload.get('senda', '')),
+        disciplinas=preview_payload.get('disciplinas') or [],
+        simbolos=preview_payload.get('simbolos') or [],
+        habilidad=preview_payload.get('habilidad', ''),
+        coste=preview_payload.get('coste', ''),
+        cripta=preview_payload.get('cripta', ''),
+        ilustrador=preview['illustrator'],
+        card_type=card_type,
+        layout_config=validated_layout,
+    )
+    if error:
+        return JsonResponse({'error': error}, status=400)
+
+    return JsonResponse({'imagen_url': render_url})
 
 
 @login_required

@@ -1,9 +1,13 @@
 from copy import deepcopy
 import json
+import os
+import tempfile
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
+from PIL import Image
 
 from apps.layouts.models import UserLayout
 from apps.layouts.services import load_classic_seed, normalize_layout_config
@@ -272,6 +276,104 @@ class TextInBoxHelpersTests(SimpleTestCase):
         self.assertEqual(x, 130)
 
 
+class HabilidadRenderAlignmentTests(SimpleTestCase):
+    def test_render_habilidad_uses_box_origin_as_outer_top_left(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+
+        srv_textos_views._render_habilidad_text(
+            image=image,
+            text='Texto de prueba',
+            x=100,
+            y=120,
+            max_width=180,
+            font_size=28,
+            color='white',
+            bg_opacity=255,
+            bg_padding=12,
+            bg_radius=0,
+            line_spacing=3,
+            bg_color=(0, 0, 0),
+            box_height=140,
+        )
+
+        bounds = image.getchannel('A').getbbox()
+        self.assertEqual(bounds[0], 100)
+        self.assertEqual(bounds[1], 120)
+
+    def test_render_habilidad_libreria_uses_box_origin_as_outer_top_left(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+
+        srv_textos_views._render_habilidad_text_libreria(
+            image=image,
+            text='**Accion** de prueba',
+            x=90,
+            y=110,
+            max_width=190,
+            font_size=26,
+            color='white',
+            bg_opacity=255,
+            bg_padding=10,
+            bg_radius=0,
+            line_spacing=3,
+            bg_color=(0, 0, 0),
+            box_height=130,
+        )
+
+        bounds = image.getchannel('A').getbbox()
+        self.assertEqual(bounds[0], 90)
+        self.assertEqual(bounds[1], 110)
+
+    def test_render_habilidad_centers_text_vertically_inside_box(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+
+        srv_textos_views._render_habilidad_text(
+            image=image,
+            text='Texto de prueba',
+            x=100,
+            y=120,
+            max_width=180,
+            font_size=28,
+            color='white',
+            bg_opacity=0,
+            bg_padding=12,
+            bg_radius=0,
+            line_spacing=3,
+            bg_color=(0, 0, 0),
+            box_height=140,
+        )
+
+        bounds = image.getchannel('A').getbbox()
+        top_gap = bounds[1] - 120
+        bottom_gap = (120 + 140) - bounds[3]
+
+        self.assertLessEqual(abs(top_gap - bottom_gap), 20)
+
+    def test_render_habilidad_libreria_centers_text_vertically_inside_box(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+
+        srv_textos_views._render_habilidad_text_libreria(
+            image=image,
+            text='**Accion** de prueba',
+            x=90,
+            y=110,
+            max_width=190,
+            font_size=26,
+            color='white',
+            bg_opacity=0,
+            bg_padding=10,
+            bg_radius=0,
+            line_spacing=3,
+            bg_color=(0, 0, 0),
+            box_height=130,
+        )
+
+        bounds = image.getchannel('A').getbbox()
+        top_gap = bounds[1] - 110
+        bottom_gap = (110 + 130) - bounds[3]
+
+        self.assertLessEqual(abs(top_gap - bottom_gap), 20)
+
+
 class NameIllustratorBoxRenderTests(TestCase):
     def test_nombre_uses_box_alignment_and_shadow_toggle(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))
@@ -293,6 +395,40 @@ class NameIllustratorBoxRenderTests(TestCase):
             metrics['ilustrador']['box']['width'],
         )
 
+    def test_ilustrador_metrics_use_classic_style_in_cripta(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['ilustrador']['font_size'] = 60
+        config['ilustrador']['color'] = 'red'
+        config['ilustrador']['box']['width'] = 500
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            card_type='cripta',
+            habilidad='',
+            ilustrador='Crafted with AI',
+        )
+
+        self.assertEqual(metrics['ilustrador']['style']['font_size'], 24)
+        self.assertEqual(metrics['ilustrador']['style']['color'], 'white')
+        self.assertEqual(metrics['ilustrador']['fit']['font_size'], 24)
+
+    def test_ilustrador_metrics_use_classic_style_in_libreria(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['ilustrador']['font_size'] = 60
+        config['ilustrador']['color'] = 'red'
+        config['ilustrador']['box']['width'] = 500
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            card_type='libreria',
+            habilidad='',
+            ilustrador='Crafted with AI',
+        )
+
+        self.assertEqual(metrics['ilustrador']['style']['font_size'], 24)
+        self.assertEqual(metrics['ilustrador']['style']['color'], 'white')
+        self.assertEqual(metrics['ilustrador']['fit']['font_size'], 24)
+
 
 class SymbolsDiscBoxSizingTests(SimpleTestCase):
     def test_disciplines_size_scales_from_box_width(self):
@@ -310,13 +446,120 @@ class SymbolsDiscBoxSizingTests(SimpleTestCase):
 
 
 class HabilidadDynamicHeightTests(SimpleTestCase):
-    def test_habilidad_height_grows_with_longer_text(self):
+    def test_habilidad_used_box_grows_with_longer_text_inside_fixed_layout_box(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['habilidad']['box'] = {
+            'x': 140,
+            'y': 760,
+            'width': 420,
+            'height': 160,
+        }
 
         short_metrics = srv_textos_views._compute_layout_metrics(config, 'cripta', 'corto')
         long_metrics = srv_textos_views._compute_layout_metrics(config, 'cripta', 'texto ' * 40)
 
-        self.assertGreater(long_metrics['habilidad']['height'], short_metrics['habilidad']['height'])
+        self.assertEqual(short_metrics['habilidad']['box']['height'], 160)
+        self.assertEqual(long_metrics['habilidad']['box']['height'], 160)
+        self.assertGreater(
+            long_metrics['habilidad']['used_box']['height'],
+            short_metrics['habilidad']['used_box']['height'],
+        )
+        self.assertGreater(long_metrics['habilidad']['used_box']['height'], 160)
+        self.assertEqual(
+            long_metrics['habilidad']['used_box']['y'] + long_metrics['habilidad']['used_box']['height'],
+            920,
+        )
+        self.assertLess(long_metrics['habilidad']['used_box']['y'], 760)
+
+    def test_habilidad_prefers_explicit_box_coordinates_without_growing_layout_box(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['habilidad']['x'] = 10
+        config['habilidad']['y_ratio'] = 0.1
+        config['habilidad']['max_width_ratio'] = 0.2
+        config['habilidad']['box_bottom_ratio'] = 0.3
+        config['habilidad']['box'] = {
+            'x': 222,
+            'y': 333,
+            'width': 444,
+            'height': 120,
+        }
+
+        metrics = srv_textos_views._compute_layout_metrics(config, 'cripta', 'texto corto')
+
+        self.assertEqual(metrics['habilidad']['box']['x'], 222)
+        self.assertEqual(metrics['habilidad']['box']['y'], 333)
+        self.assertEqual(metrics['habilidad']['box']['width'], 444)
+        self.assertEqual(metrics['habilidad']['box']['height'], 120)
+        self.assertEqual(
+            metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
+            453,
+        )
+
+    def test_habilidad_used_box_is_clamped_to_card_top(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['habilidad']['box'] = {
+            'x': 140,
+            'y': 300,
+            'width': 420,
+            'height': 100,
+        }
+
+        metrics = srv_textos_views._compute_layout_metrics(config, 'cripta', 'texto ' * 120)
+
+        self.assertEqual(metrics['habilidad']['used_box']['y'], 0)
+        self.assertEqual(metrics['habilidad']['used_box']['height'], 400)
+        self.assertEqual(
+            metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
+            400,
+        )
+
+    def test_disciplinas_vertical_anchor_is_derived_from_habilidad_used_box(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['habilidad']['box'] = {
+            'x': 140,
+            'y': 780,
+            'width': 420,
+            'height': 140,
+        }
+        config['disciplinas']['box'] = {
+            'x': 30,
+            'y': 10,
+            'width': 64,
+            'height': 180,
+        }
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'cripta',
+            'Texto corto',
+            disciplinas=[{'name': 'ani', 'level': 'inf'}, {'name': 'for', 'level': 'inf'}, {'name': 'pot', 'level': 'inf'}],
+        )
+
+        self.assertEqual(metrics['disciplinas']['box']['x'], 30)
+        self.assertEqual(metrics['disciplinas']['box']['width'], 64)
+        self.assertEqual(
+            metrics['disciplinas']['box']['y'] + metrics['disciplinas']['box']['height'],
+            metrics['habilidad']['used_box']['y'],
+        )
+
+    def test_disciplinas_size_depends_on_box_width_and_spacing_on_box_height(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['disciplinas']['box'] = {
+            'x': 18,
+            'y': 90,
+            'width': 72,
+            'height': 210,
+        }
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'cripta',
+            'Texto corto',
+            disciplinas=[{'name': 'ani', 'level': 'inf'}, {'name': 'for', 'level': 'inf'}, {'name': 'pot', 'level': 'inf'}],
+        )
+
+        self.assertEqual(metrics['disciplinas']['size'], 72)
+        self.assertEqual(metrics['disciplinas']['spacing'], 70)
 
 
 class GlobalCollisionResolverTests(SimpleTestCase):
@@ -329,6 +572,71 @@ class GlobalCollisionResolverTests(SimpleTestCase):
         resolved = srv_textos_views._resolve_global_collisions(metrics, card_height=1040)
 
         self.assertLess(resolved['disciplinas']['box']['y'], 680)
+
+    def test_collision_resolver_keeps_explicit_free_boxes_in_place(self):
+        metrics = {
+            'habilidad': {'box': {'x': 150, 'y': 600, 'width': 400, 'height': 300}, 'source': 'box'},
+            'disciplinas': {
+                'box': {'x': 40, 'y': 680, 'width': 90, 'height': 260},
+                'anchor_mode': 'free',
+                'source': 'box',
+            },
+            'ilustrador': {
+                'box': {'x': 160, 'y': 760, 'width': 260, 'height': 40},
+                'anchor_mode': 'free',
+                'source': 'box',
+            },
+        }
+
+        resolved = srv_textos_views._resolve_global_collisions(metrics, card_height=1040)
+
+        self.assertEqual(resolved['disciplinas']['box']['y'], 680)
+        self.assertEqual(resolved['ilustrador']['box']['y'], 760)
+
+
+class CriptaBoxMetricsTests(SimpleTestCase):
+    def test_metrics_include_explicit_cripta_box(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['habilidad']['box'] = {
+            'x': 210,
+            'y': 640,
+            'width': 330,
+            'height': 180,
+        }
+        config['cripta']['box'] = {
+            'x': 70,
+            'y': 560,
+            'width': 90,
+            'height': 40,
+        }
+
+        metrics = srv_textos_views._compute_layout_metrics(config, 'cripta', 'texto corto')
+
+        self.assertEqual(metrics['cripta']['box']['x'], 70)
+        self.assertEqual(metrics['cripta']['box']['y'], 560)
+
+    def test_metrics_use_classic_style_for_cripta_number(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['cripta']['font_size'] = 80
+        config['cripta']['color'] = 'red'
+
+        metrics = srv_textos_views._compute_layout_metrics(config, 'cripta', 'texto corto')
+
+        self.assertEqual(metrics['cripta']['style']['font_size'], 35)
+        self.assertEqual(metrics['cripta']['style']['color'], 'white')
+
+
+class VerticalStackPositionTests(SimpleTestCase):
+    def test_explicit_box_starts_stack_from_top(self):
+        positions = srv_textos_views._compute_vertical_stack_positions(
+            box={'x': 10, 'y': 100, 'width': 90, 'height': 260},
+            item_size=80,
+            spacing=90,
+            item_count=2,
+            source='box',
+        )
+
+        self.assertEqual(positions, [100, 190])
 
 
 class BoxEngineRenderRegressionTests(TestCase):
@@ -348,3 +656,124 @@ class BoxEngineRenderRegressionTests(TestCase):
         )
 
         self.assertIn(response.status_code, (200, 404))
+
+
+class RenderFromPathTests(TestCase):
+    def test_render_carta_from_absolute_path_prepares_media_source(self):
+        image_path = os.path.join(settings.BASE_DIR, 'static', 'layouts', 'images', 'Mimir.png')
+
+        with patch('apps.srv_textos.views._render_carta', return_value=('/media/render/from-path.png', None)) as mock_render:
+            render_url, error = srv_textos_views._render_carta_from_path(
+                image_path,
+                nombre='Mimir',
+                clan='',
+                senda='',
+                disciplinas=[],
+                simbolos=[],
+                habilidad='',
+                coste='',
+                cripta='',
+                ilustrador='Crafted with AI',
+                card_type='cripta',
+                layout_config=load_classic_seed('cripta'),
+            )
+
+        self.assertIsNone(error)
+        self.assertEqual(render_url, '/media/render/from-path.png')
+        prepared_url = mock_render.call_args.kwargs['imagen_url']
+        self.assertTrue(prepared_url.startswith('/media/layout_preview_sources/'))
+        prepared_path = os.path.join(settings.MEDIA_ROOT, prepared_url.replace(settings.MEDIA_URL, ''))
+        self.assertTrue(os.path.exists(prepared_path))
+
+
+class ClassicStyleRenderTests(TestCase):
+    def _make_temp_image_path(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        image_path = os.path.join(temp_dir.name, 'base.png')
+        Image.new('RGBA', (745, 1040), (0, 0, 0, 0)).save(image_path)
+        self.addCleanup(temp_dir.cleanup)
+        return image_path
+
+    def test_render_cripta_uses_classic_style_even_if_layout_overrides_it(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['cripta']['font_size'] = 80
+        config['cripta']['color'] = 'red'
+        image_path = self._make_temp_image_path()
+
+        with patch('apps.srv_textos.views.ImageDraw.ImageDraw.text') as mock_text:
+            render_url, error = srv_textos_views._render_carta_from_path(
+                image_path,
+                nombre='',
+                clan='',
+                senda='',
+                disciplinas=[],
+                simbolos=[],
+                habilidad='',
+                coste='',
+                cripta='5',
+                ilustrador='',
+                card_type='cripta',
+                layout_config=config,
+            )
+
+        self.assertIsNone(error)
+        self.assertTrue(render_url.startswith('/media/render/'))
+        self.assertEqual(mock_text.call_count, 1)
+        self.assertEqual(mock_text.call_args.kwargs['fill'], 'white')
+        self.assertEqual(mock_text.call_args.kwargs['font'].size, 35)
+
+    def test_render_ilustrador_uses_classic_style_even_if_layout_overrides_it(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['ilustrador']['font_size'] = 60
+        config['ilustrador']['color'] = 'red'
+        image_path = self._make_temp_image_path()
+
+        with patch('apps.srv_textos.views.ImageDraw.ImageDraw.text') as mock_text:
+            render_url, error = srv_textos_views._render_carta_from_path(
+                image_path,
+                nombre='',
+                clan='',
+                senda='',
+                disciplinas=[],
+                simbolos=[],
+                habilidad='',
+                coste='',
+                cripta='',
+                ilustrador='Crafted with AI',
+                card_type='cripta',
+                layout_config=config,
+            )
+
+        self.assertIsNone(error)
+        self.assertTrue(render_url.startswith('/media/render/'))
+        self.assertEqual(mock_text.call_count, 1)
+        self.assertEqual(mock_text.call_args.kwargs['fill'], 'white')
+        self.assertEqual(mock_text.call_args.kwargs['font'].size, 24)
+
+    def test_render_libreria_ilustrador_uses_classic_style_even_if_layout_overrides_it(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['ilustrador']['font_size'] = 60
+        config['ilustrador']['color'] = 'red'
+        image_path = self._make_temp_image_path()
+
+        with patch('apps.srv_textos.views.ImageDraw.ImageDraw.text') as mock_text:
+            render_url, error = srv_textos_views._render_carta_from_path(
+                image_path,
+                nombre='',
+                clan='',
+                senda='',
+                disciplinas=[],
+                simbolos=[],
+                habilidad='',
+                coste='',
+                cripta='',
+                ilustrador='Crafted with AI',
+                card_type='libreria',
+                layout_config=config,
+            )
+
+        self.assertIsNone(error)
+        self.assertTrue(render_url.startswith('/media/render/'))
+        self.assertEqual(mock_text.call_count, 1)
+        self.assertEqual(mock_text.call_args.kwargs['fill'], 'white')
+        self.assertEqual(mock_text.call_args.kwargs['font'].size, 24)

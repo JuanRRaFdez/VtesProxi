@@ -111,6 +111,23 @@ def _resolve_imagen_path(imagen_url):
     return os.path.join(settings.MEDIA_ROOT, imagen_path)
 
 
+def _prepare_render_source_from_path(imagen_abspath, target_name=None):
+    if not imagen_abspath or not os.path.exists(imagen_abspath):
+        return None
+
+    preview_dir = os.path.join(settings.MEDIA_ROOT, 'layout_preview_sources')
+    os.makedirs(preview_dir, exist_ok=True)
+
+    source_ext = os.path.splitext(imagen_abspath)[1] or '.png'
+    source_name = target_name or os.path.basename(imagen_abspath)
+    safe_base = _safe_card_filename_base(source_name) or 'layout-preview'
+    target_filename = safe_base + source_ext.lower()
+    target_path = os.path.join(preview_dir, target_filename)
+
+    shutil.copyfile(imagen_abspath, target_path)
+    return settings.MEDIA_URL + 'layout_preview_sources/' + target_filename
+
+
 def _resolve_font_path(font_path):
     if not font_path:
         raise ValueError('font_path requerido')
@@ -193,13 +210,14 @@ def _clamp_box(box, default_box):
 
 def _compute_habilidad_dynamic_height(habilidad, font_size, max_width, line_spacing, padding):
     safe_text = str(habilidad or '').strip()
+    usable_width = max(1, int(max_width) - max(0, int(padding * 2)))
     if not safe_text:
-        return max(1, int(font_size + padding))
+        return max(1, int(font_size + (padding * 2)))
 
-    if max_width <= 0:
-        return max(1, int(font_size + padding))
+    if usable_width <= 0:
+        return max(1, int(font_size + (padding * 2)))
 
-    approx_chars_per_line = max(1, int(max_width / max(1, font_size * 0.55)))
+    approx_chars_per_line = max(1, int(usable_width / max(1, font_size * 0.55)))
     line_count = 0
     for block in safe_text.split('\n'):
         block = block.strip()
@@ -209,21 +227,71 @@ def _compute_habilidad_dynamic_height(habilidad, font_size, max_width, line_spac
         wrapped = (len(block) + approx_chars_per_line - 1) // approx_chars_per_line
         line_count += max(1, wrapped)
 
-    return int((line_count * (font_size + line_spacing)) + max(0, padding))
+    return int((line_count * (font_size + line_spacing)) + max(0, padding * 2))
 
 
 def _compute_disc_metrics_from_box(box, icon_count):
     normalized_count = max(1, int(icon_count or 0))
-    size_by_width = int(box['width'])
-    size_by_height = int(box['height'] / normalized_count)
-    size = max(1, min(size_by_width, size_by_height))
+    size = max(1, int(box['width']))
     spacing = max(1, int(box['height'] / normalized_count))
     return size, spacing
 
 
 def _compute_symbol_metrics_from_box(box, icon_count):
-    size, spacing = _compute_disc_metrics_from_box(box, icon_count)
+    normalized_count = max(1, int(icon_count or 0))
+    size_by_width = int(box['width'])
+    size_by_height = int(box['height'] / normalized_count)
+    size = max(1, min(size_by_width, size_by_height))
+    spacing = max(1, int(box['height'] / normalized_count))
     return {'size': size, 'spacing': spacing}
+
+
+def _get_classic_style_tokens(card_type):
+    normalized_card_type = _normalize_card_type(card_type)
+    classic = _load_layout('classic')
+    classic_scope = classic.get('libreria', {}) if normalized_card_type == 'libreria' else classic
+    classic_il = classic_scope.get('ilustrador') or classic.get('ilustrador') or {}
+    classic_cripta = classic.get('cripta') or {}
+
+    return {
+        'ilustrador': {
+            'font_size': int(classic_il.get('font_size', 24) or 24),
+            'color': classic_il.get('color', 'white') or 'white',
+        },
+        'cripta': {
+            'font_size': int(classic_cripta.get('font_size', 35) or 35),
+            'color': classic_cripta.get('color', 'white') or 'white',
+        },
+    }
+
+
+def _compute_vertical_stack_positions(box, item_size, spacing, item_count, source='legacy'):
+    count = max(0, int(item_count or 0))
+    if count == 0:
+        return []
+
+    top = int(box.get('y', 0))
+    bottom = top + max(1, int(box.get('height', item_size)))
+    item_size = max(1, int(item_size))
+    spacing = max(1, int(spacing))
+
+    positions = []
+    if source == 'box':
+        current_y = top
+        for _ in range(count):
+            if current_y + item_size > bottom:
+                break
+            positions.append(current_y)
+            current_y += spacing
+        return positions
+
+    current_y = bottom - item_size
+    for _ in range(count):
+        if current_y < top:
+            break
+        positions.append(current_y)
+        current_y -= spacing
+    return positions
 
 
 def _boxes_overlap(box_a, box_b):
@@ -252,7 +320,8 @@ def _boxes_overlap_vertically(box_a, box_b):
 
 def _resolve_global_collisions(metrics, card_height):
     resolved = deepcopy(metrics)
-    habilidad_box = resolved.get('habilidad', {}).get('box')
+    habilidad_metrics = resolved.get('habilidad', {})
+    habilidad_box = habilidad_metrics.get('used_box') or habilidad_metrics.get('box')
     if not isinstance(habilidad_box, dict):
         return resolved
 
@@ -267,6 +336,8 @@ def _resolve_global_collisions(metrics, card_height):
             continue
 
         anchor_mode = section.get('anchor_mode', 'free')
+        if section.get('source') == 'box' and anchor_mode == 'free':
+            continue
         if anchor_mode == 'bottom_locked':
             continue
 
@@ -290,12 +361,17 @@ def _resolve_global_collisions(metrics, card_height):
 
 def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='', ilustrador='', disciplinas=None, simbolos=None):
     normalized_card_type = _normalize_card_type(card_type)
+    raw_lay = config if isinstance(config, dict) else {}
     lay = normalize_layout_config(normalized_card_type, config)
+    classic_styles = _get_classic_style_tokens(normalized_card_type)
     lc = lay['carta']
     card_w = int(lc['width'])
     card_h = int(lc['height'])
 
     layout_scope = lay.get('libreria', {}) if normalized_card_type == 'libreria' else lay
+    raw_layout_scope = raw_lay.get('libreria', {}) if normalized_card_type == 'libreria' else raw_lay
+    if not isinstance(raw_layout_scope, dict):
+        raw_layout_scope = {}
 
     ln = layout_scope.get('nombre') or lay.get('nombre') or {}
     lil = layout_scope.get('ilustrador') or lay.get('ilustrador') or {}
@@ -303,6 +379,13 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
     lsi = layout_scope.get('simbolos') if normalized_card_type == 'libreria' else None
     lh = layout_scope.get('habilidad') or lay.get('habilidad') or {}
     lco = layout_scope.get('coste') or lay.get('coste') or {}
+    lcr = lay.get('cripta') or {}
+
+    raw_lil = raw_layout_scope.get('ilustrador') or raw_lay.get('ilustrador') or {}
+    raw_ld = raw_layout_scope.get('disciplinas') or raw_lay.get('disciplinas') or {}
+    raw_lsi = raw_layout_scope.get('simbolos') if normalized_card_type == 'libreria' else None
+    raw_lh = raw_layout_scope.get('habilidad') or raw_lay.get('habilidad') or {}
+    raw_lcr = raw_lay.get('cripta') or {}
 
     ln_y = ln.get('y', 0)
     if isinstance(ln_y, float):
@@ -327,67 +410,101 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         ellipsis_enabled=nombre_rules.get('ellipsis_enabled', True),
     )
 
-    il_box_default_y = max(0, card_h - int(lil.get('bottom', 0) or 0) - int(lil.get('font_size', 24) or 24))
+    il_style = classic_styles['ilustrador']
+    il_font_size = int(il_style['font_size'])
+    il_box_default_y = max(0, card_h - int(lil.get('bottom', 0) or 0) - il_font_size)
     il_box = _clamp_box(lil.get('box'), {
         'x': int(lil.get('x', 45) or 45),
         'y': il_box_default_y,
         'width': max(1, card_w - 90),
-        'height': max(1, int(lil.get('font_size', 24) or 24) + 8),
+        'height': max(1, il_font_size + 8),
     })
     il_rules = lil.get('rules') if isinstance(lil.get('rules'), dict) else {}
     il_align = il_rules.get('align', 'left')
     il_fit = _fit_text_to_box(
         text=ilustrador,
         font_path='static/fonts/Gill Sans.otf',
-        start_font_size=lil.get('font_size', 24),
-        min_font_size=il_rules.get('min_font_size', 14),
+        start_font_size=il_font_size,
+        min_font_size=il_font_size,
         max_width=il_box['width'],
-        ellipsis_enabled=il_rules.get('ellipsis_enabled', True),
+        ellipsis_enabled=True,
     )
 
-    hab_y = int(card_h * float(lh.get('y_ratio', 0.83) or 0.83))
-    hab_max_w = int(card_w * float(lh.get('max_width_ratio', 0.74) or 0.74))
+    hab_default_y = int(card_h * float(lh.get('y_ratio', 0.83) or 0.83))
+    hab_default_w = int(card_w * float(lh.get('max_width_ratio', 0.74) or 0.74))
+    has_habilidad_box = isinstance(raw_lh.get('box'), dict)
+    habilidad_box = _clamp_box(lh.get('box') if has_habilidad_box else None, {
+        'x': int(lh.get('x', 160) or 160),
+        'y': hab_default_y,
+        'width': max(1, hab_default_w),
+        'height': max(1, int(lh.get('font_size', 33) or 33)),
+    })
     dynamic_hab_box_h = _compute_habilidad_dynamic_height(
         habilidad=habilidad,
         font_size=int(lh.get('font_size', 33) or 33),
-        max_width=hab_max_w,
+        max_width=habilidad_box['width'],
         line_spacing=int(lh.get('line_spacing', 4) or 4),
         padding=int(lh.get('bg_padding', 19) or 19),
     )
 
-    fixed_hab_box_h = None
-    if 'box_bottom_ratio' in lh:
-        fixed_hab_box_h = int(card_h * float(lh['box_bottom_ratio'])) - hab_y
-
-    if fixed_hab_box_h is None or fixed_hab_box_h <= 0:
-        hab_box_h = dynamic_hab_box_h
+    if has_habilidad_box:
+        hab_box_bottom = habilidad_box['y'] + habilidad_box['height']
+        used_hab_box_y = max(0, hab_box_bottom - dynamic_hab_box_h)
+        used_hab_box_h = max(1, hab_box_bottom - used_hab_box_y)
     else:
-        hab_box_h = max(int(fixed_hab_box_h), int(dynamic_hab_box_h))
-    habilidad_box = {
-        'x': int(lh.get('x', 160) or 160),
-        'y': hab_y,
-        'width': max(1, hab_max_w),
-        'height': max(1, hab_box_h),
+        fixed_hab_box_h = None
+        if 'box_bottom_ratio' in lh:
+            fixed_hab_box_h = int(card_h * float(lh['box_bottom_ratio'])) - habilidad_box['y']
+
+        if fixed_hab_box_h is None or fixed_hab_box_h <= 0:
+            habilidad_box['height'] = dynamic_hab_box_h
+        else:
+            habilidad_box['height'] = max(int(fixed_hab_box_h), int(dynamic_hab_box_h))
+        used_hab_box_h = habilidad_box['height']
+
+    used_hab_box = {
+        'x': habilidad_box['x'],
+        'y': used_hab_box_y if has_habilidad_box else habilidad_box['y'] + max(0, habilidad_box['height'] - used_hab_box_h),
+        'width': habilidad_box['width'],
+        'height': max(1, used_hab_box_h),
     }
 
-    disc_box = _clamp_box(ld.get('box') if isinstance(ld, dict) else None, {
+    has_disc_box = isinstance(raw_ld.get('box'), dict)
+    disc_box = _clamp_box(ld.get('box') if has_disc_box and isinstance(ld, dict) else None, {
         'x': int(ld.get('x', 0) or 0) if isinstance(ld, dict) else 0,
         'y': max(0, card_h - int(ld.get('bottom', 100) or 100) - int(ld.get('size', 64) or 64)) if isinstance(ld, dict) else 0,
         'width': int(ld.get('size', 64) or 64) if isinstance(ld, dict) else 64,
         'height': int((ld.get('spacing', 80) or 80) * max(1, len(disciplinas or []))) if isinstance(ld, dict) else 200,
     })
+    disc_box['y'] = max(0, used_hab_box['y'] - disc_box['height'])
     disc_size, disc_spacing = _compute_disc_metrics_from_box(disc_box, icon_count=len(disciplinas or []))
 
     simbolos_box = None
     simbolos_metrics = None
     if normalized_card_type == 'libreria' and isinstance(lsi, dict):
-        simbolos_box = _clamp_box(lsi.get('box'), {
+        has_simbolos_box = isinstance((raw_lsi or {}).get('box'), dict)
+        simbolos_box = _clamp_box(lsi.get('box') if has_simbolos_box else None, {
             'x': int(lsi.get('x', 0) or 0),
             'y': int(lsi.get('y', 0) or 0),
             'width': int(lsi.get('size', 64) or 64),
             'height': int((lsi.get('spacing', 80) or 80) * max(1, len(simbolos or []))),
         })
         simbolos_metrics = _compute_symbol_metrics_from_box(simbolos_box, icon_count=len(simbolos or []))
+    else:
+        has_simbolos_box = False
+
+    has_ilustrador_box = isinstance(raw_lil.get('box'), dict)
+    pad = int(lh.get('bg_padding', 19) or 19)
+    has_cripta_box = isinstance(raw_lcr.get('box'), dict)
+    cripta_style = classic_styles['cripta']
+    cripta_font_size = int(cripta_style['font_size'])
+    cripta_default_box = {
+        'x': max(0, used_hab_box['x'] - pad),
+        'y': max(0, used_hab_box['y'] - (pad * 2) - cripta_font_size - int(lcr.get('y_gap', 1) or 1)) if isinstance(lcr, dict) else 0,
+        'width': max(30, cripta_font_size * 2),
+        'height': max(30, cripta_font_size + 8),
+    }
+    cripta_box = _clamp_box(lcr.get('box') if has_cripta_box else None, cripta_default_box) if isinstance(lcr, dict) else None
 
     coste_size = int(lco.get('size', 64) or 64) if isinstance(lco, dict) else 64
     coste_bottom = int(lco.get('bottom', 40) or 40) if isinstance(lco, dict) else 40
@@ -413,30 +530,42 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
             'align': il_align,
             'shadow_enabled': bool((lil.get('shadow') or {}).get('enabled', False)),
             'fit': il_fit,
+            'style': il_style,
             'text_width': il_fit['width'],
             'anchor_mode': il_rules.get('anchor_mode', 'free'),
+            'source': 'box' if has_ilustrador_box else 'legacy',
         },
         'habilidad': {
             'box': habilidad_box,
-            'height': habilidad_box['height'],
+            'used_box': used_hab_box,
+            'height': used_hab_box['height'],
+            'source': 'box' if has_habilidad_box else 'legacy',
         },
         'disciplinas': {
             'box': disc_box,
             'size': disc_size,
             'spacing': disc_spacing,
             'anchor_mode': (ld.get('rules') or {}).get('anchor_mode', 'free') if isinstance(ld, dict) else 'free',
+            'source': 'box' if has_disc_box else 'legacy',
         },
         'coste': {
             'box': coste_box,
             'anchor_mode': 'bottom_locked',
         },
     }
+    if cripta_box is not None:
+        metrics['cripta'] = {
+            'box': cripta_box,
+            'style': cripta_style,
+            'source': 'box' if has_cripta_box else 'legacy',
+        }
     if simbolos_box is not None and simbolos_metrics is not None:
         metrics['simbolos'] = {
             'box': simbolos_box,
             'size': simbolos_metrics['size'],
             'spacing': simbolos_metrics['spacing'],
             'anchor_mode': ((lsi.get('rules') or {}).get('anchor_mode', 'free') if isinstance(lsi, dict) else 'free'),
+            'source': 'box' if has_simbolos_box else 'legacy',
         }
 
     return _resolve_global_collisions(metrics, card_height=card_h)
@@ -742,6 +871,14 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     if not segments:
         return
 
+    pad = int(bg_padding)
+    outer_x = int(x)
+    outer_y = int(y)
+    outer_width = max(1, int(max_width))
+    content_x = outer_x + pad
+    content_y = outer_y + pad
+    content_width = max(1, outer_width - (pad * 2))
+
     # --- Primer paso: calcular dimensiones del texto (dry run) ---
     words = []
     for seg in segments:
@@ -772,9 +909,9 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
                         words.append({'type': 'text', 'text': part, 'style': style, 'font': font})
 
     line_height = font_size + line_spacing
-    cur_x = x
-    cur_y = y
-    max_right = x
+    cur_x = content_x
+    cur_y = content_y
+    max_right = content_x
     for word_info in words:
         if word_info.get('type') == 'symbol':
             w_width = word_info['size'] + word_info['gap']
@@ -785,8 +922,8 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
             w_font = word_info['font']
             bbox = w_font.getbbox(w_text)
             w_width = bbox[2] - bbox[0]
-        if cur_x + w_width > x + max_width - bg_padding and cur_x > x:
-            cur_x = x
+        if cur_x + w_width > content_x + content_width and cur_x > content_x:
+            cur_x = content_x
             cur_y += line_height
             if w_text and w_text.startswith(' '):
                 w_text = w_text.lstrip(' ')
@@ -797,17 +934,15 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
         cur_x += w_width
 
     text_bottom = cur_y + line_height
-    text_right = x + max_width
 
     # --- Dibujar recuadro redondeado con transparencia ---
-    pad = bg_padding
-    rx, ry = x - pad, y - pad * 2
-    rw = text_right - x + pad
+    rx, ry = outer_x, outer_y
+    rw = outer_width
     # Altura fija si se especifica box_height, dinámica si no
     if box_height is not None:
         rh = box_height
     else:
-        rh = text_bottom - y + pad
+        rh = max(1, (text_bottom - content_y) + (pad * 2))
     bg_opacity = max(0, min(255, int(bg_opacity)))
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
@@ -819,10 +954,10 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     image.alpha_composite(overlay)
 
     # --- Segundo paso: construir líneas ---
-    text_width = max_width - pad
+    text_width = content_width
     lines = []
     current_line = []
-    cur_x = x
+    cur_x = content_x
     for word_info in words:
         w_font = word_info['font']
         w_style = word_info['style']
@@ -833,10 +968,10 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
             w_text = word_info['text']
             bbox = w_font.getbbox(w_text)
             w_width = bbox[2] - bbox[0]
-        if cur_x + w_width > x + text_width and cur_x > x:
+        if cur_x + w_width > content_x + text_width and cur_x > content_x:
             lines.append(current_line)
             current_line = []
-            cur_x = x
+            cur_x = content_x
             if w_text and w_text.startswith(' '):
                 w_text = w_text.lstrip(' ')
                 bbox = w_font.getbbox(w_text)
@@ -860,11 +995,11 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     draw = ImageDraw.Draw(image)
     content_height = max(1, len(lines)) * line_height
     if box_height is not None:
-        inner_top = ry + max(0, int(pad * 0.5))
-        inner_height = max(1, rh - max(1, pad))
+        inner_top = outer_y + pad
+        inner_height = max(1, rh - (pad * 2))
         cur_y = inner_top + max(0, (inner_height - content_height) // 2)
     else:
-        cur_y = y - int(pad * 1.5)
+        cur_y = content_y
     symbol_cache = {}
     icon_vertical_nudge = max(2, int(font_size * 0.16))
     for line in lines:
@@ -894,7 +1029,7 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
                 else:
                     line_width += max(2, int(font_size * 0.1))
 
-        cur_x = x + max(0, (text_width - line_width) // 2)
+        cur_x = content_x + max(0, (text_width - line_width) // 2)
         for i, winfo in enumerate(line):
             if token_is_symbol[i]:
                 cache_key = (winfo['path'], winfo['size'])
@@ -956,12 +1091,20 @@ def _render_habilidad_text_libreria(image, text, x, y, max_width, font_size, col
     if not segments:
         return
 
+    pad = int(bg_padding)
+    outer_x = int(x)
+    outer_y = int(y)
+    outer_width = max(1, int(max_width))
+    content_x = outer_x + pad
+    content_y = outer_y + pad
+    content_width = max(1, outer_width - (pad * 2))
+
     tokens = _segment_to_tokens_libreria(segments, font_size)
     if not tokens:
         return
 
     line_height = int(font_size * 1.15) + line_spacing
-    text_width_limit = max_width - bg_padding
+    text_width_limit = content_width
 
     lines = []
     current_line = []
@@ -999,12 +1142,12 @@ def _render_habilidad_text_libreria(image, text, x, y, max_width, font_size, col
         lines.append(current_line)
 
     pad = bg_padding
-    rx, ry = x - pad, y - pad * 2
-    rw = max_width + pad
+    rx, ry = outer_x, outer_y
+    rw = outer_width
     if box_height is not None:
         rh = box_height
     else:
-        rh = max(line_height, len(lines) * line_height + pad)
+        rh = max(line_height + (pad * 2), len(lines) * line_height + (pad * 2))
 
     bg_opacity = max(0, min(255, int(bg_opacity)))
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
@@ -1019,11 +1162,11 @@ def _render_habilidad_text_libreria(image, text, x, y, max_width, font_size, col
     draw = ImageDraw.Draw(image)
     content_height = max(1, len(lines)) * line_height
     if box_height is not None:
-        inner_top = ry + max(0, int(pad * 0.5))
-        inner_height = max(1, rh - max(1, pad))
+        inner_top = outer_y + pad
+        inner_height = max(1, rh - (pad * 2))
         cy = inner_top + max(0, (inner_height - content_height) // 2)
     else:
-        cy = y - int(pad * 1.5)
+        cy = content_y
     symbol_cache = {}
     icon_vertical_nudge = max(2, int(font_size * 0.16))
     for line in lines:
@@ -1038,7 +1181,7 @@ def _render_habilidad_text_libreria(image, text, x, y, max_width, font_size, col
                 tok_w = tok['size'] + tok['gap']
             line_width += tok_w
 
-        cx = x + max(0, (text_width_limit - line_width) // 2)
+        cx = content_x + max(0, (text_width_limit - line_width) // 2)
         for tok in line:
             if tok['type'] == 'text':
                 if tok.get('style') == 'italic':
@@ -1128,20 +1271,22 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     disc_size = int(disc_metrics.get('size', ld['size']))
     disc_spacing = int(disc_metrics.get('spacing', ld['spacing']))
     disc_x = int(disc_box.get('x', ld['x']))
-    disc_bottom_limit = int(disc_box.get('y', image.height - ld['bottom'] - disc_size)) + int(disc_box.get('height', disc_size * max(1, len(disciplinas or []))))
+    disc_source = disc_metrics.get('source', 'legacy')
 
     default_hab_font_size = int(lh['font_size'])
     if hab_font_size is None:
         hab_font_size = default_hab_font_size
     else:
         hab_font_size = max(20, min(int(hab_font_size), 80))
-    hab_x         = lh['x']
-    hab_y         = int(card_h * lh['y_ratio'])
-    hab_max_w     = int(card_w * lh['max_width_ratio'])
+    hab_metrics = metrics.get('habilidad') or {}
+    hab_box = hab_metrics.get('used_box') or hab_metrics.get('box') or {}
+    hab_x         = int(hab_box.get('x', lh['x']))
+    hab_y         = int(hab_box.get('y', int(card_h * lh['y_ratio'])))
+    hab_max_w     = int(hab_box.get('width', int(card_w * lh['max_width_ratio'])))
     hab_padding   = lh['bg_padding']
     hab_radius    = lh['bg_radius']
     hab_line_sp   = lh['line_spacing']
-    hab_box_h     = int(card_h * lh['box_bottom_ratio']) - hab_y if 'box_bottom_ratio' in lh else None
+    hab_box_h     = int(hab_box.get('height')) if hab_box else (int(card_h * lh['box_bottom_ratio']) - hab_y if 'box_bottom_ratio' in lh else None)
 
     coste_size   = lco['size']
     coste_bottom = lco['bottom']
@@ -1266,12 +1411,16 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
         # Se invierten porque pintamos de abajo a arriba: la última pintada queda más alta
         all_discs = list(reversed(disc_sup_images)) + list(reversed(disc_inf_images))
         if all_discs:
-            y_bottom = disc_bottom_limit - disc_size
-            for disc_img in all_discs:
-                if y_bottom < disc_box.get('y', 0):
-                    break
-                image.alpha_composite(disc_img, (disc_x, y_bottom))
-                y_bottom -= disc_spacing
+            disc_positions = _compute_vertical_stack_positions(
+                box=disc_box,
+                item_size=disc_size,
+                spacing=disc_spacing,
+                item_count=len(all_discs),
+                source=disc_source,
+            )
+            disc_images = list(reversed(all_discs)) if disc_source == 'box' else all_discs
+            for disc_img, disc_y in zip(disc_images, disc_positions):
+                image.alpha_composite(disc_img, (disc_x, disc_y))
 
     # Base Y del recuadro de habilidad (se computa siempre)
     pad = hab_padding
@@ -1279,12 +1428,21 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     # 6) Número de cripta (sobre el recuadro, pegado a la izquierda)
     if card_type == 'cripta' and cripta and lcr:
         try:
-            font_bold, _ = _load_hab_fonts(cripta_font_size)
-            box_top = hab_y - pad * 2
-            cripta_y = box_top - cripta_font_size - cripta_y_gap
-            cripta_x = hab_x - pad
+            cripta_metrics = metrics.get('cripta') or {}
+            cripta_style = cripta_metrics.get('style') or {}
+            effective_cripta_font_size = int(cripta_style.get('font_size', cripta_font_size))
+            effective_cripta_color = cripta_style.get('color', lcr['color'])
+            font_bold, _ = _load_hab_fonts(effective_cripta_font_size)
+            cripta_box = cripta_metrics.get('box') or {
+                'x': hab_x - pad,
+                'y': hab_y - (pad * 2) - effective_cripta_font_size - cripta_y_gap,
+                'width': max(30, effective_cripta_font_size * 2),
+                'height': max(30, effective_cripta_font_size + 8),
+            }
+            cripta_x = int(cripta_box['x'])
+            cripta_y = int(cripta_box['y']) + max(0, (int(cripta_box['height']) - effective_cripta_font_size) // 2)
             draw_cripta = ImageDraw.Draw(image)
-            draw_cripta.text((cripta_x, cripta_y), str(cripta), font=font_bold, fill=lcr['color'])
+            draw_cripta.text((cripta_x, cripta_y), str(cripta), font=font_bold, fill=effective_cripta_color)
         except Exception as e:
             print(f'Error renderizando cripta: {e}')
 
@@ -1312,11 +1470,14 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     if ilustrador and lil:
         try:
             ilustrador_metrics = metrics.get('ilustrador', {})
+            il_style = ilustrador_metrics.get('style') or {}
+            effective_il_font_size = int(il_style.get('font_size', il_font_size))
+            effective_il_color = il_style.get('color', lil['color'])
             il_fit = ilustrador_metrics.get('fit') or {}
             rendered_il = il_fit.get('text', ilustrador)
             font_normal = il_fit.get('font')
             if font_normal is None:
-                _, font_normal = _load_hab_fonts(il_font_size)
+                _, font_normal = _load_hab_fonts(effective_il_font_size)
             il_w = il_fit.get('width')
             if il_w is None:
                 il_bbox = font_normal.getbbox(rendered_il)
@@ -1330,9 +1491,9 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
             }
             il_align = ilustrador_metrics.get('align', 'left')
             il_x = _compute_aligned_x(il_box['x'], il_w, il_align, il_box['width'])
-            il_y = int(il_box['y']) + max(0, (int(il_box['height']) - int(il_fit.get('font_size', il_font_size))) // 2)
+            il_y = int(il_box['y']) + max(0, (int(il_box['height']) - int(il_fit.get('font_size', effective_il_font_size))) // 2)
             draw_il = ImageDraw.Draw(image)
-            draw_il.text((il_x, il_y), rendered_il, font=font_normal, fill=lil['color'])
+            draw_il.text((il_x, il_y), rendered_il, font=font_normal, fill=effective_il_color)
         except Exception as e:
             print(f'Error renderizando ilustrador: {e}')
 
@@ -1389,6 +1550,16 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     image.save(render_path, 'PNG')
     render_url = settings.MEDIA_URL + 'render/' + filename
     return render_url, None
+
+
+def _render_carta_from_path(imagen_abspath, **kwargs):
+    imagen_url = _prepare_render_source_from_path(
+        imagen_abspath,
+        target_name=kwargs.get('nombre') or os.path.basename(imagen_abspath),
+    )
+    if not imagen_url:
+        return None, 'Imagen no encontrada'
+    return _render_carta(imagen_url=imagen_url, **kwargs)
 
 
 # --- Endpoints ---

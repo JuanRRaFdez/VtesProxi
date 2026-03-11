@@ -1,10 +1,12 @@
 from copy import deepcopy
 import json
+from pathlib import Path
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from apps.layouts.models import UserLayout
 from apps.layouts.services import (
@@ -187,6 +189,31 @@ class LayoutConfigValidationTests(TestCase):
         self.layout.refresh_from_db()
         self.assertEqual(self.layout.config['nombre']['rules']['align'], 'right')
 
+    def test_update_config_normalizes_square_symbol_layers(self):
+        valid_config = normalize_layout_config('cripta', deepcopy(self.layout.config))
+        valid_config['clan']['box'] = {'x': 20, 'y': 30, 'width': 80, 'height': 120}
+        valid_config['senda']['box'] = {'x': 55, 'y': 65, 'width': 90, 'height': 70}
+        valid_config['coste']['box'] = {'x': 610, 'y': 820, 'width': 64, 'height': 96}
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            '/layouts/api/update-config',
+            data=json.dumps({
+                'layout_id': self.layout.id,
+                'config': valid_config,
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        saved = response.json()['layout']['config']
+        self.assertEqual(saved['clan']['box']['width'], saved['clan']['box']['height'])
+        self.assertEqual(saved['clan']['size'], saved['clan']['box']['width'])
+        self.assertEqual(saved['senda']['box']['width'], saved['senda']['box']['height'])
+        self.assertEqual(saved['senda']['size'], saved['senda']['box']['width'])
+        self.assertEqual(saved['coste']['box']['width'], saved['coste']['box']['height'])
+        self.assertEqual(saved['coste']['size'], saved['coste']['box']['width'])
+
 
 class LayoutConfigBoxSchemaTests(TestCase):
     def test_normalize_legacy_config_adds_box_for_nombre(self):
@@ -284,6 +311,89 @@ class LayoutManagementApiTests(TestCase):
         self.assertTrue(next_default.is_default)
 
 
+class LayoutPreviewApiTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='preview-user', password='secret')
+        self.client.force_login(self.user)
+
+    def test_preview_for_cripta_uses_fixed_mimir_payload(self):
+        layout = UserLayout.objects.create(
+            user=self.user,
+            name='Preview Cripta',
+            card_type='cripta',
+            config=load_classic_seed('cripta'),
+            is_default=False,
+        )
+
+        preview_payload = {
+            'nombre': 'Mimir',
+            'clan': 'gangrel.png',
+            'senda': '',
+            'coste': '8',
+            'cripta': '5',
+            'ilustrador': '',
+            'habilidad': 'Texto',
+            'disciplinas': [{'name': 'ani', 'level': 'inf'}],
+            'simbolos': [],
+        }
+        with patch('apps.layouts.views.get_card_autocomplete', create=True, return_value=preview_payload), patch(
+            'apps.layouts.views._render_carta_from_path',
+            create=True,
+            return_value=('/media/render/mimir-preview.png', None),
+        ) as mock_render:
+            response = self.client.post(
+                '/layouts/api/preview',
+                data=json.dumps({'card_type': 'cripta', 'layout_config': layout.config}),
+                content_type='application/json',
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['imagen_url'], '/media/render/mimir-preview.png')
+        self.assertEqual(mock_render.call_args.kwargs['nombre'], 'Mimir')
+        self.assertEqual(mock_render.call_args.kwargs['senda'], 'caine.png')
+        self.assertEqual(mock_render.call_args.kwargs['ilustrador'], 'Crafted with AI')
+        self.assertEqual(mock_render.call_args.kwargs['card_type'], 'cripta')
+        self.assertTrue(mock_render.call_args.kwargs['imagen_abspath'].endswith('static/layouts/images/Mimir.png'))
+
+    def test_preview_for_libreria_uses_fixed_44_magnum_payload(self):
+        layout = UserLayout.objects.create(
+            user=self.user,
+            name='Preview Libreria',
+            card_type='libreria',
+            config=load_classic_seed('libreria'),
+            is_default=False,
+        )
+
+        preview_payload = {
+            'nombre': '.44 Magnum',
+            'clan': '',
+            'senda': '',
+            'coste': 'pool2',
+            'cripta': '',
+            'ilustrador': '',
+            'habilidad': 'Texto',
+            'disciplinas': [],
+            'simbolos': ['equipment'],
+        }
+        with patch('apps.layouts.views.get_card_autocomplete', create=True, return_value=preview_payload), patch(
+            'apps.layouts.views._render_carta_from_path',
+            create=True,
+            return_value=('/media/render/44magnum-preview.png', None),
+        ) as mock_render:
+            response = self.client.post(
+                '/layouts/api/preview',
+                data=json.dumps({'card_type': 'libreria', 'layout_config': layout.config}),
+                content_type='application/json',
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['imagen_url'], '/media/render/44magnum-preview.png')
+        self.assertEqual(mock_render.call_args.kwargs['nombre'], '.44 Magnum')
+        self.assertEqual(mock_render.call_args.kwargs['ilustrador'], 'Crafted with AI')
+        self.assertEqual(mock_render.call_args.kwargs['card_type'], 'libreria')
+        self.assertTrue(mock_render.call_args.kwargs['imagen_abspath'].endswith('static/layouts/images/44. magnum.png'))
+
+
 class LayoutEditorTemplateTests(TestCase):
     def test_editor_template_contains_required_mount_points(self):
         user = get_user_model().objects.create_user(username='editor-ui', password='secret')
@@ -293,6 +403,16 @@ class LayoutEditorTemplateTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="layout-stage"')
         self.assertContains(response, 'id="layout-properties"')
+
+    def test_editor_template_contains_preview_mount_points(self):
+        user = get_user_model().objects.create_user(username='editor-preview-ui', password='secret')
+        self.client.force_login(user)
+        response = self.client.get('/layouts/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="layout-stage-viewport"')
+        self.assertContains(response, 'id="layout-canvas"')
+        self.assertContains(response, 'id="layout-preview-image"')
 
 
 class LayoutEditorAdvancedControlsTests(TestCase):
@@ -305,6 +425,26 @@ class LayoutEditorAdvancedControlsTests(TestCase):
         self.assertContains(response, 'id="prop-align"')
         self.assertContains(response, 'id="prop-min-font-size"')
         self.assertContains(response, 'id="prop-ellipsis-enabled"')
+
+
+class LayoutEditorStaticAssetTests(SimpleTestCase):
+    def test_editor_script_defines_semantic_layer_profiles(self):
+        script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')
+
+        self.assertIn('const layerProfiles', script)
+        self.assertIn('fixedFont: true', script)
+        self.assertIn('square: true', script)
+
+    def test_editor_script_does_not_create_visible_layer_labels(self):
+        script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')
+
+        self.assertNotIn('layout-layer-label', script)
+
+    def test_editor_css_keeps_overlays_invisible_until_selected(self):
+        stylesheet = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.css').read_text(encoding='utf-8')
+
+        self.assertIn('background: transparent', stylesheet)
+        self.assertIn('border: 0', stylesheet)
 
 
 class EndToEndLayoutFlowTests(TestCase):

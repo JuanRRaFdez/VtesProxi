@@ -148,6 +148,68 @@ def _ensure_text_v2_section(normalized, section_name):
         rules.setdefault(key, default_value)
 
 
+def _normalize_square_box(section, default_box):
+    raw_box = section.get('box')
+    if not isinstance(raw_box, dict):
+        raw_box = default_box
+
+    box = {
+        'x': int(raw_box.get('x', default_box['x'])),
+        'y': int(raw_box.get('y', default_box['y'])),
+        'width': int(raw_box.get('width', default_box['width'])),
+        'height': int(raw_box.get('height', default_box['height'])),
+    }
+    side = max(1, int(max(box['width'], box['height'])))
+    box['width'] = side
+    box['height'] = side
+    section['box'] = box
+    return box
+
+
+def _ensure_square_symbol_section(normalized, section_name):
+    section = normalized.get(section_name)
+    if not isinstance(section, dict):
+        return
+
+    side = max(1, int(section.get('size', 64) or 64))
+    default_box = {
+        'x': int(section.get('x', 0) or 0),
+        'y': int(section.get('y', 0) or 0),
+        'width': side,
+        'height': side,
+    }
+    box = _normalize_square_box(section, default_box)
+    section['x'] = box['x']
+    section['y'] = box['y']
+    section['size'] = box['width']
+
+
+def _ensure_square_coste_section(normalized):
+    section = normalized.get('coste')
+    if not isinstance(section, dict):
+        return
+
+    carta = normalized.get('carta') or {}
+    card_width = int(carta.get('width', 745) or 745)
+    card_height = int(carta.get('height', 1040) or 1040)
+    side = max(1, int(section.get('size', 64) or 64))
+    default_x = int(section.get('left', card_width - side - int(section.get('right', 40) or 40)))
+    default_y = max(0, card_height - int(section.get('bottom', 40) or 40) - side)
+    default_box = {
+        'x': default_x,
+        'y': default_y,
+        'width': side,
+        'height': side,
+    }
+    box = _normalize_square_box(section, default_box)
+    section['size'] = box['width']
+    section['bottom'] = max(0, card_height - box['y'] - box['height'])
+    if 'right' in section:
+        section['right'] = max(0, card_width - box['x'] - box['width'])
+    if 'left' in section or 'right' not in section:
+        section['left'] = box['x']
+
+
 def normalize_layout_config(card_type, config):
     if not isinstance(config, dict):
         raise LayoutValidationError('config debe ser un objeto JSON')
@@ -159,6 +221,10 @@ def normalize_layout_config(card_type, config):
     normalized = deepcopy(config)
     _ensure_text_v2_section(normalized, 'nombre')
     _ensure_text_v2_section(normalized, 'ilustrador')
+    _ensure_square_symbol_section(normalized, 'clan')
+    if normalized_card_type == 'cripta':
+        _ensure_square_symbol_section(normalized, 'senda')
+    _ensure_square_coste_section(normalized)
     return normalized
 
 
@@ -250,6 +316,7 @@ def validate_layout_config(card_type, config):
     _expect_number(clan, 'size', 8, 1000)
     _expect_number(clan, 'x', 0, 3000)
     _expect_number(clan, 'y', 0, 3000)
+    _validate_box('clan', clan)
 
     disciplinas = normalized['disciplinas']
     _expect_number(disciplinas, 'size', 8, 1000)
@@ -278,6 +345,7 @@ def validate_layout_config(card_type, config):
         _expect_number(coste, 'left', 0, 3000)
     if 'right' in coste:
         _expect_number(coste, 'right', 0, 3000)
+    _validate_box('coste', coste)
 
     ilustrador = normalized['ilustrador']
     _expect_number(ilustrador, 'font_size', 8, 200)
@@ -290,6 +358,7 @@ def validate_layout_config(card_type, config):
         _expect_number(senda, 'size', 8, 1000)
         _expect_number(senda, 'x', 0, 3000)
         _expect_number(senda, 'y', 0, 3000)
+        _validate_box('senda', senda)
 
         cripta = normalized['cripta']
         _expect_number(cripta, 'font_size', 8, 200)
