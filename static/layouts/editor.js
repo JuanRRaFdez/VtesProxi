@@ -14,6 +14,12 @@
     const propY = document.getElementById('prop-y');
     const propWidth = document.getElementById('prop-width');
     const propHeight = document.getElementById('prop-height');
+    const propAlign = document.getElementById('prop-align');
+    const propAnchorMode = document.getElementById('prop-anchor-mode');
+    const propMinFontSize = document.getElementById('prop-min-font-size');
+    const propAutoshrinkEnabled = document.getElementById('prop-autoshrink-enabled');
+    const propEllipsisEnabled = document.getElementById('prop-ellipsis-enabled');
+    const propShadowEnabled = document.getElementById('prop-shadow-enabled');
     const applyButton = document.getElementById('apply-properties');
 
     const initialLayouts = JSON.parse((document.getElementById('layout-initial-layouts') || { textContent: '[]' }).textContent || '[]');
@@ -28,6 +34,7 @@
     };
 
     const layerOrder = ['nombre', 'clan', 'senda', 'disciplinas', 'simbolos', 'habilidad', 'coste', 'cripta', 'ilustrador'];
+    const textRuleLayers = ['nombre', 'ilustrador'];
 
     function setStatus(message, type) {
         statusEl.textContent = message || '';
@@ -83,9 +90,82 @@
         return state.config ? state.config[layerName] : null;
     }
 
+    function ensureSectionRules(layerName, section) {
+        if (!section.rules || typeof section.rules !== 'object') {
+            section.rules = {};
+        }
+        if (section.rules.align == null) {
+            section.rules.align = layerName === 'nombre' ? 'center' : 'left';
+        }
+        if (section.rules.anchor_mode == null) {
+            section.rules.anchor_mode = 'free';
+        }
+        if (section.rules.min_font_size == null) {
+            section.rules.min_font_size = layerName === 'ilustrador' ? 14 : 18;
+        }
+        if (section.rules.autoshrink == null) {
+            section.rules.autoshrink = true;
+        }
+        if (section.rules.ellipsis_enabled == null) {
+            section.rules.ellipsis_enabled = true;
+        }
+    }
+
+    function ensureSectionShadow(section) {
+        if (!section.shadow || typeof section.shadow !== 'object') {
+            section.shadow = {};
+        }
+        if (section.shadow.enabled == null) {
+            section.shadow.enabled = false;
+        }
+    }
+
+    function updateAdvancedInputs(layerName, section) {
+        const isTextLayer = textRuleLayers.includes(layerName);
+        const advancedInputs = [
+            propAlign,
+            propAnchorMode,
+            propMinFontSize,
+            propAutoshrinkEnabled,
+            propEllipsisEnabled,
+            propShadowEnabled,
+        ];
+        advancedInputs.forEach(function (input) {
+            input.disabled = !isTextLayer;
+        });
+
+        if (!isTextLayer || !section) {
+            propAlign.value = 'left';
+            propAnchorMode.value = 'free';
+            propMinFontSize.value = '';
+            propAutoshrinkEnabled.checked = false;
+            propEllipsisEnabled.checked = false;
+            propShadowEnabled.checked = false;
+            return;
+        }
+
+        ensureSectionRules(layerName, section);
+        ensureSectionShadow(section);
+        propAlign.value = section.rules.align;
+        propAnchorMode.value = section.rules.anchor_mode;
+        propMinFontSize.value = Number(section.rules.min_font_size || 0);
+        propAutoshrinkEnabled.checked = Boolean(section.rules.autoshrink);
+        propEllipsisEnabled.checked = Boolean(section.rules.ellipsis_enabled);
+        propShadowEnabled.checked = Boolean(section.shadow.enabled);
+    }
+
     function frameFromSection(layerName, section, carta) {
         const cardWidth = Number(carta.width || 745);
         const cardHeight = Number(carta.height || 1040);
+        if (section.box && typeof section.box === 'object') {
+            return {
+                x: Math.max(0, Math.round(Number(section.box.x || 0))),
+                y: Math.max(0, Math.round(Number(section.box.y || 0))),
+                width: Math.max(30, Math.round(Number(section.box.width || 30))),
+                height: Math.max(30, Math.round(Number(section.box.height || 30))),
+            };
+        }
+
         let x = Number(section.x || 0);
         let y = Number(section.y || 0);
         if (layerName === 'nombre' && typeof section.y === 'number' && section.y < 2) {
@@ -137,6 +217,12 @@
         const cardHeight = Number(carta.height || 1040);
         section.x = Math.round(frame.x);
         section.y = Math.round(frame.y);
+        section.box = {
+            x: Math.round(frame.x),
+            y: Math.round(frame.y),
+            width: Math.max(30, Math.round(frame.width)),
+            height: Math.max(30, Math.round(frame.height)),
+        };
 
         if (layerName === 'nombre') {
             section.font_size = Math.max(8, Math.round(frame.height));
@@ -181,6 +267,7 @@
         if (!layerName) {
             selectedNameEl.textContent = 'Selecciona una capa';
             updatePropertyInputs(null);
+            updateAdvancedInputs(null, null);
             return;
         }
 
@@ -188,10 +275,35 @@
         const section = sectionForLayer(layerName);
         if (!section) {
             updatePropertyInputs(null);
+            updateAdvancedInputs(null, null);
             return;
         }
         const frame = frameFromSection(layerName, section, state.config.carta || {});
         updatePropertyInputs(frame);
+        updateAdvancedInputs(layerName, section);
+    }
+
+    function applyAdvancedProperties(layerName, section) {
+        if (!layerName || !section) {
+            return;
+        }
+
+        if (!section.rules || typeof section.rules !== 'object') {
+            section.rules = {};
+        }
+        section.rules.anchor_mode = propAnchorMode.value || 'free';
+
+        if (!textRuleLayers.includes(layerName)) {
+            return;
+        }
+
+        ensureSectionRules(layerName, section);
+        ensureSectionShadow(section);
+        section.rules.align = propAlign.value || section.rules.align;
+        section.rules.min_font_size = Math.max(8, Number(propMinFontSize.value || section.rules.min_font_size || 12));
+        section.rules.autoshrink = Boolean(propAutoshrinkEnabled.checked);
+        section.rules.ellipsis_enabled = Boolean(propEllipsisEnabled.checked);
+        section.shadow.enabled = Boolean(propShadowEnabled.checked);
     }
 
     function getFrameFromElement(el) {
@@ -324,6 +436,7 @@
             height: Number(propHeight.value || 50),
         };
         applyFrameToSection(state.selectedLayer, section, frame, state.config.carta || {});
+        applyAdvancedProperties(state.selectedLayer, section);
         renderLayers();
         debouncedPreview();
     }

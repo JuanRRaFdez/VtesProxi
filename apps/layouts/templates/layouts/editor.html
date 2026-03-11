@@ -55,6 +55,33 @@
                 <label for="prop-height">Height</label>
                 <input id="prop-height" type="number" class="form-control form-control-sm">
             </div>
+            <div class="layout-property-grid layout-property-grid-advanced">
+                <label for="prop-align">Align</label>
+                <select id="prop-align" class="form-select form-select-sm">
+                    <option value="left">left</option>
+                    <option value="center">center</option>
+                    <option value="right">right</option>
+                </select>
+
+                <label for="prop-anchor-mode">Anchor</label>
+                <select id="prop-anchor-mode" class="form-select form-select-sm">
+                    <option value="free">free</option>
+                    <option value="top_locked">top_locked</option>
+                    <option value="bottom_locked">bottom_locked</option>
+                </select>
+
+                <label for="prop-min-font-size">Min Font</label>
+                <input id="prop-min-font-size" type="number" class="form-control form-control-sm" min="8" max="200">
+
+                <label for="prop-autoshrink-enabled">Autoshrink</label>
+                <input id="prop-autoshrink-enabled" type="checkbox" class="form-check-input">
+
+                <label for="prop-ellipsis-enabled">Ellipsis</label>
+                <input id="prop-ellipsis-enabled" type="checkbox" class="form-check-input">
+
+                <label for="prop-shadow-enabled">Shadow</label>
+                <input id="prop-shadow-enabled" type="checkbox" class="form-check-input">
+            </div>
             <button type="button" id="apply-properties" class="btn btn-sm btn-primary">Aplicar</button>
             <p id="layout-status" class="layout-status"></p>
         </aside>

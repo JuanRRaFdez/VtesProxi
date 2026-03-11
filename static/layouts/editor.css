@@ -102,6 +102,15 @@
     align-items: center;
 }
 
+.layout-property-grid-advanced {
+    margin-top: 0.5rem;
+}
+
+.layout-property-grid-advanced .form-check-input {
+    margin: 0;
+    justify-self: start;
+}
+
 .layout-selected-name {
     margin: 0;
     color: #6a7280;

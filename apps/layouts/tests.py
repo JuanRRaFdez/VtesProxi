@@ -276,6 +276,18 @@ class LayoutEditorTemplateTests(TestCase):
         self.assertContains(response, 'id="layout-properties"')
 
 
+class LayoutEditorAdvancedControlsTests(TestCase):
+    def test_editor_contains_text_rule_controls(self):
+        user = get_user_model().objects.create_user(username='rules-ui', password='secret')
+        self.client.force_login(user)
+
+        response = self.client.get('/layouts/')
+
+        self.assertContains(response, 'id="prop-align"')
+        self.assertContains(response, 'id="prop-min-font-size"')
+        self.assertContains(response, 'id="prop-ellipsis-enabled"')
+
+
 class EndToEndLayoutFlowTests(TestCase):
     def test_user_can_create_edit_set_default_and_render_with_layout(self):
         user = get_user_model().objects.create_user(username='e2e-user', password='secret')
