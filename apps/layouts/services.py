@@ -133,12 +133,11 @@ def _ensure_text_v2_section(normalized, section_name):
     if not isinstance(box, dict):
         section['box'] = _legacy_text_box(section_name, section, card_width, card_height)
     else:
-        section['box'] = {
-            'x': int(box.get('x', 0) or 0),
-            'y': int(box.get('y', 0) or 0),
-            'width': max(1, int(box.get('width', card_width) or card_width)),
-            'height': max(1, int(box.get('height', 40) or 40)),
-        }
+        section['box'] = deepcopy(box)
+        section['box'].setdefault('x', 0)
+        section['box'].setdefault('y', 0)
+        section['box'].setdefault('width', card_width)
+        section['box'].setdefault('height', 40)
 
     rules = section.get('rules')
     if not isinstance(rules, dict):
@@ -163,14 +162,61 @@ def normalize_layout_config(card_type, config):
     return normalized
 
 
+def _validate_box(section_name, section):
+    box = section.get('box')
+    if not isinstance(box, dict):
+        raise LayoutValidationError(f'{section_name}.box debe ser un objeto')
+
+    for field_name in ('x', 'y'):
+        value = box.get(field_name)
+        if not _is_number(value):
+            raise LayoutValidationError(f'{section_name}.box.{field_name} debe ser numérico')
+        if value < 0 or value > 3000:
+            raise LayoutValidationError(f'{section_name}.box.{field_name} fuera de rango')
+
+    for field_name in ('width', 'height'):
+        value = box.get(field_name)
+        if not _is_number(value):
+            raise LayoutValidationError(f'{section_name}.box.{field_name} debe ser numérico')
+        if value <= 0 or value > 3000:
+            raise LayoutValidationError(f'{section_name}.box.{field_name} fuera de rango')
+
+
+def _validate_text_rules(section_name, rules):
+    if not isinstance(rules, dict):
+        raise LayoutValidationError(f'{section_name}.rules debe ser un objeto')
+
+    align = rules.get('align')
+    if align not in ('left', 'center', 'right'):
+        raise LayoutValidationError(f'{section_name}.rules.align inválido')
+
+    anchor_mode = rules.get('anchor_mode')
+    if anchor_mode not in ('free', 'top_locked', 'bottom_locked'):
+        raise LayoutValidationError(f'{section_name}.rules.anchor_mode inválido')
+
+    autoshrink = rules.get('autoshrink')
+    if not isinstance(autoshrink, bool):
+        raise LayoutValidationError(f'{section_name}.rules.autoshrink debe ser booleano')
+
+    ellipsis_enabled = rules.get('ellipsis_enabled')
+    if not isinstance(ellipsis_enabled, bool):
+        raise LayoutValidationError(f'{section_name}.rules.ellipsis_enabled debe ser booleano')
+
+    min_font_size = rules.get('min_font_size')
+    if not _is_number(min_font_size):
+        raise LayoutValidationError(f'{section_name}.rules.min_font_size debe ser numérico')
+    if min_font_size < 8 or min_font_size > 200:
+        raise LayoutValidationError(f'{section_name}.rules.min_font_size fuera de rango')
+
+
 def validate_layout_config(card_type, config):
     if not isinstance(config, dict):
         raise LayoutValidationError('config debe ser un objeto JSON')
 
-    normalized = deepcopy(config)
     normalized_card_type = (card_type or '').strip().lower()
     if normalized_card_type not in ('cripta', 'libreria'):
         raise LayoutValidationError('card_type inválido')
+    normalized = normalize_layout_config(normalized_card_type, config)
 
     required_sections = ['carta', 'nombre', 'clan', 'disciplinas', 'habilidad', 'coste', 'ilustrador']
     if normalized_card_type == 'cripta':
@@ -197,6 +243,8 @@ def validate_layout_config(card_type, config):
             raise LayoutValidationError('nombre.y fuera de rango')
     else:
         raise LayoutValidationError('nombre.y debe ser numérico')
+    _validate_box('nombre', nombre)
+    _validate_text_rules('nombre', nombre.get('rules'))
 
     clan = normalized['clan']
     _expect_number(clan, 'size', 8, 1000)
@@ -234,6 +282,8 @@ def validate_layout_config(card_type, config):
     ilustrador = normalized['ilustrador']
     _expect_number(ilustrador, 'font_size', 8, 200)
     _expect_number(ilustrador, 'bottom', 0, 3000)
+    _validate_box('ilustrador', ilustrador)
+    _validate_text_rules('ilustrador', ilustrador.get('rules'))
 
     if normalized_card_type == 'cripta':
         senda = normalized['senda']

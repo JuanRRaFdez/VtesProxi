@@ -7,7 +7,12 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from apps.layouts.models import UserLayout
-from apps.layouts.services import load_classic_seed, normalize_layout_config
+from apps.layouts.services import (
+    LayoutValidationError,
+    load_classic_seed,
+    normalize_layout_config,
+    validate_layout_config,
+)
 
 
 class UserLayoutModelTests(TestCase):
@@ -178,6 +183,22 @@ class LayoutConfigBoxSchemaTests(TestCase):
 
         self.assertEqual(normalized['nombre']['rules']['align'], 'center')
         self.assertEqual(normalized['ilustrador']['rules']['align'], 'left')
+
+
+class LayoutConfigValidationV2Tests(TestCase):
+    def test_validate_rejects_invalid_align(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['nombre']['rules']['align'] = 'diagonal'
+
+        with self.assertRaises(LayoutValidationError):
+            validate_layout_config('cripta', config)
+
+    def test_validate_rejects_box_out_of_range(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['nombre']['box']['width'] = -1
+
+        with self.assertRaises(LayoutValidationError):
+            validate_layout_config('cripta', config)
 
 
 class LayoutManagementApiTests(TestCase):
