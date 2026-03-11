@@ -23,6 +23,13 @@ FIXED_LAYOUT_PREVIEWS = {
     'libreria': {
         'card_name': '.44 Magnum',
         'image_path': 'static/layouts/images/44. magnum.png',
+        'clan': 'gangrel.png',
+        'path': 'death.png',
+        'disciplinas': [
+            {'name': 'ofu', 'level': 'inf'},
+            {'name': 'dom', 'level': 'inf'},
+            {'name': 'tha', 'level': 'inf'},
+        ],
         'illustrator': 'Crafted with AI',
     },
 }
@@ -142,9 +149,9 @@ def api_preview(request):
     render_url, error = _render_carta_from_path(
         imagen_abspath=imagen_abspath,
         nombre=preview_payload.get('nombre', preview['card_name']),
-        clan=preview_payload.get('clan', ''),
+        clan=preview.get('clan', preview_payload.get('clan', '')),
         senda=preview.get('path', preview_payload.get('senda', '')),
-        disciplinas=preview_payload.get('disciplinas') or [],
+        disciplinas=preview.get('disciplinas', preview_payload.get('disciplinas') or []),
         simbolos=preview_payload.get('simbolos') or [],
         habilidad=preview_payload.get('habilidad', ''),
         coste=preview_payload.get('coste', ''),

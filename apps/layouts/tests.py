@@ -389,6 +389,16 @@ class LayoutPreviewApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['imagen_url'], '/media/render/44magnum-preview.png')
         self.assertEqual(mock_render.call_args.kwargs['nombre'], '.44 Magnum')
+        self.assertEqual(mock_render.call_args.kwargs['clan'], 'gangrel.png')
+        self.assertEqual(mock_render.call_args.kwargs['senda'], 'death.png')
+        self.assertEqual(
+            mock_render.call_args.kwargs['disciplinas'],
+            [
+                {'name': 'ofu', 'level': 'inf'},
+                {'name': 'dom', 'level': 'inf'},
+                {'name': 'tha', 'level': 'inf'},
+            ],
+        )
         self.assertEqual(mock_render.call_args.kwargs['ilustrador'], 'Crafted with AI')
         self.assertEqual(mock_render.call_args.kwargs['card_type'], 'libreria')
         self.assertTrue(mock_render.call_args.kwargs['imagen_abspath'].endswith('static/layouts/images/44. magnum.png'))
