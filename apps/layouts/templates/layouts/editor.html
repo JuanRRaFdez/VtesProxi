@@ -1,8 +1,76 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}Layouts | VtesProxi{% endblock %}
+{% block title %}Editor de Layouts | VtesProxi{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'layouts/editor.css' %}">
+{% endblock %}
 
 {% block content %}
-<h1>Editor de Layouts</h1>
-<p>Próximamente: editor visual de cartas.</p>
+<div class="layout-editor-shell">
+    <input type="hidden" id="csrf-token" value="{{ csrf_token }}">
+
+    <div class="layout-toolbar">
+        <div class="layout-toolbar-group">
+            <label for="layout-card-type">Tipo</label>
+            <select id="layout-card-type" class="form-select form-select-sm">
+                <option value="cripta" {% if initial_card_type == 'cripta' %}selected{% endif %}>Cripta</option>
+                <option value="libreria" {% if initial_card_type == 'libreria' %}selected{% endif %}>Libreria</option>
+            </select>
+        </div>
+
+        <div class="layout-toolbar-group layout-toolbar-grow">
+            <label for="layout-select">Layout</label>
+            <select id="layout-select" class="form-select form-select-sm"></select>
+        </div>
+
+        <div class="layout-toolbar-actions">
+            <button type="button" id="layout-create" class="btn btn-sm btn-outline-primary">Crear</button>
+            <button type="button" id="layout-rename" class="btn btn-sm btn-outline-secondary">Renombrar</button>
+            <button type="button" id="layout-delete" class="btn btn-sm btn-outline-danger">Borrar</button>
+            <button type="button" id="layout-set-default" class="btn btn-sm btn-outline-warning">Default</button>
+            <button type="button" id="layout-save" class="btn btn-sm btn-success">Guardar config</button>
+        </div>
+    </div>
+
+    <div class="layout-editor-grid">
+        <section class="layout-stage-panel">
+            <div id="layout-stage" class="layout-stage">
+                <div id="layout-overlays" class="layout-overlays"></div>
+            </div>
+            <p class="layout-hint">Arrastra y redimensiona capas. Guarda para persistir en BD.</p>
+        </section>
+
+        <aside id="layout-properties" class="layout-properties">
+            <h2>Propiedades</h2>
+            <p id="layout-selected-name" class="layout-selected-name">Selecciona una capa</p>
+            <div class="layout-property-grid">
+                <label for="prop-x">X</label>
+                <input id="prop-x" type="number" class="form-control form-control-sm">
+                <label for="prop-y">Y</label>
+                <input id="prop-y" type="number" class="form-control form-control-sm">
+                <label for="prop-width">Width</label>
+                <input id="prop-width" type="number" class="form-control form-control-sm">
+                <label for="prop-height">Height</label>
+                <input id="prop-height" type="number" class="form-control form-control-sm">
+            </div>
+            <button type="button" id="apply-properties" class="btn btn-sm btn-primary">Aplicar</button>
+            <p id="layout-status" class="layout-status"></p>
+        </aside>
+    </div>
+</div>
+
+{{ initial_layouts|json_script:"layout-initial-layouts" }}
+<script id="layout-initial-meta" type="application/json">
+{
+  "card_type": "{{ initial_card_type }}",
+  "active_layout_id": {% if active_layout_id %}{{ active_layout_id }}{% else %}null{% endif %}
+}
+</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+<script src="{% static 'layouts/editor.js' %}"></script>
 {% endblock %}

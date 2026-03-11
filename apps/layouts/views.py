@@ -11,7 +11,23 @@ from apps.layouts.services import LayoutValidationError, load_classic_seed, vali
 
 @login_required
 def editor(request):
-    return render(request, 'layouts/editor.html')
+    card_type = (request.GET.get('card_type') or 'cripta').strip().lower()
+    if card_type not in ('cripta', 'libreria'):
+        card_type = 'cripta'
+
+    layouts = list(
+        UserLayout.objects.filter(user=request.user, card_type=card_type).order_by('name', 'id')
+    )
+    active_layout = next((layout for layout in layouts if layout.is_default), None)
+    if active_layout is None and layouts:
+        active_layout = layouts[0]
+
+    context = {
+        'initial_card_type': card_type,
+        'initial_layouts': [_serialize_layout(layout) for layout in layouts],
+        'active_layout_id': active_layout.id if active_layout else None,
+    }
+    return render(request, 'layouts/editor.html', context)
 
 
 def _serialize_layout(layout):

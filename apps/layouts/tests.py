@@ -225,3 +225,14 @@ class LayoutManagementApiTests(TestCase):
         next_default.refresh_from_db()
         self.assertFalse(previous_default.is_default)
         self.assertTrue(next_default.is_default)
+
+
+class LayoutEditorTemplateTests(TestCase):
+    def test_editor_template_contains_required_mount_points(self):
+        user = get_user_model().objects.create_user(username='editor-ui', password='secret')
+        self.client.force_login(user)
+        response = self.client.get('/layouts/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="layout-stage"')
+        self.assertContains(response, 'id="layout-properties"')
