@@ -446,7 +446,7 @@ class SymbolsDiscBoxSizingTests(SimpleTestCase):
 
 
 class HabilidadDynamicHeightTests(SimpleTestCase):
-    def test_habilidad_used_box_grows_with_longer_text_inside_fixed_layout_box(self):
+    def test_habilidad_box_without_flag_remains_fixed(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))
         config['habilidad']['box'] = {
             'x': 140,
@@ -464,12 +464,38 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             long_metrics['habilidad']['used_box']['height'],
             short_metrics['habilidad']['used_box']['height'],
         )
-        self.assertGreater(long_metrics['habilidad']['used_box']['height'], 160)
-        self.assertEqual(
-            long_metrics['habilidad']['used_box']['y'] + long_metrics['habilidad']['used_box']['height'],
-            920,
+        self.assertLessEqual(long_metrics['habilidad']['used_box']['height'], 160)
+        self.assertEqual(long_metrics['habilidad']['used_box']['y'], 760)
+
+    def test_cripta_dynamic_habilidad_from_bottom_uses_only_bottom_edge(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['habilidad']['x'] = 10
+        config['habilidad']['y_ratio'] = 0.1
+        config['habilidad']['max_width_ratio'] = 0.2
+        config['habilidad']['box_bottom_ratio'] = 0.3
+        config['habilidad']['box'] = {
+            'x': 222,
+            'y': 333,
+            'width': 444,
+            'height': 120,
+        }
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'cripta',
+            'texto ' * 30,
+            dynamic_habilidad_from_bottom=True,
         )
-        self.assertLess(long_metrics['habilidad']['used_box']['y'], 760)
+
+        self.assertEqual(metrics['habilidad']['box']['x'], 222)
+        self.assertEqual(metrics['habilidad']['box']['y'], 333)
+        self.assertEqual(metrics['habilidad']['box']['width'], 444)
+        self.assertEqual(metrics['habilidad']['box']['height'], 120)
+        self.assertEqual(
+            metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
+            453,
+        )
+        self.assertLess(metrics['habilidad']['used_box']['y'], 333)
 
     def test_habilidad_prefers_explicit_box_coordinates_without_growing_layout_box(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))
@@ -490,12 +516,10 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
         self.assertEqual(metrics['habilidad']['box']['y'], 333)
         self.assertEqual(metrics['habilidad']['box']['width'], 444)
         self.assertEqual(metrics['habilidad']['box']['height'], 120)
-        self.assertEqual(
-            metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
-            453,
-        )
+        self.assertLessEqual(metrics['habilidad']['used_box']['height'], 120)
+        self.assertGreaterEqual(metrics['habilidad']['used_box']['y'], 333)
 
-    def test_habilidad_used_box_is_clamped_to_card_top(self):
+    def test_habilidad_used_box_is_clamped_to_card_top_when_flag_is_enabled(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))
         config['habilidad']['box'] = {
             'x': 140,
@@ -504,7 +528,12 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             'height': 100,
         }
 
-        metrics = srv_textos_views._compute_layout_metrics(config, 'cripta', 'texto ' * 120)
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'cripta',
+            'texto ' * 120,
+            dynamic_habilidad_from_bottom=True,
+        )
 
         self.assertEqual(metrics['habilidad']['used_box']['y'], 0)
         self.assertEqual(metrics['habilidad']['used_box']['height'], 400)
@@ -560,6 +589,38 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
 
         self.assertEqual(metrics['disciplinas']['size'], 72)
         self.assertEqual(metrics['disciplinas']['spacing'], 70)
+
+
+class RenderClanContextTests(TestCase):
+    def test_render_clan_propagates_dynamic_habilidad_from_bottom(self):
+        payload = {
+            'card_type': 'cripta',
+            'layout_override': load_classic_seed('cripta'),
+            'clan': '',
+            'nombre': 'Arika',
+            'senda': '',
+            'disciplinas': [],
+            'simbolos': [],
+            'habilidad': 'Texto',
+            'coste': '',
+            'cripta': '',
+            'ilustrador': '',
+            'hab_opacity': 180,
+            'hab_font_size': 33,
+            'imagen_url': '/media/recortes/base.png',
+            'dynamic_habilidad_from_bottom': True,
+        }
+
+        with patch('apps.srv_textos.views._render_carta', return_value=('/media/render/test.png', None)) as mock_render:
+            response = self.client.post(
+                '/srv-textos/render-clan/',
+                data=json.dumps(payload),
+                content_type='application/json',
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['imagen_url'], '/media/render/test.png')
+        self.assertTrue(mock_render.call_args.kwargs['dynamic_habilidad_from_bottom'])
 
 
 class GlobalCollisionResolverTests(SimpleTestCase):

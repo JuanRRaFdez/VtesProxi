@@ -568,7 +568,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), clan: clan, nombre: valor, senda: senda, disciplinas: disciplinas, simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), clan: clan, nombre: valor, senda: senda, disciplinas: disciplinas, simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl, dynamic_habilidad_from_bottom: cardType === 'cripta' })
             })
             .then(function(response) { return response.json(); })
             .then(function(data) {
@@ -721,7 +721,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), nombre: valor, clan: clan, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), nombre: valor, clan: clan, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl, dynamic_habilidad_from_bottom: cardType === 'cripta' })
             })
             .then(response => response.json())
             .then(data => {
@@ -750,7 +750,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl, dynamic_habilidad_from_bottom: cardType === 'cripta' })
             })
             .then(response => response.json())
             .then(data => {
@@ -817,7 +817,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl, dynamic_habilidad_from_bottom: cardType === 'cripta' })
             })
             .then(response => response.json())
             .then(data => {
@@ -847,7 +847,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: coste, cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), clan: clan, nombre: valor, senda: senda, disciplinas: getSelectedDisciplinas(), simbolos: getSelectedSimbolos(), habilidad: (document.getElementById('habilidad') || {}).value || '', coste: coste, cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl, dynamic_habilidad_from_bottom: cardType === 'cripta' })
             })
             .then(function(response) { return response.json(); })
             .then(function(data) {
@@ -878,7 +878,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRFToken': (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || ''
                 },
-                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), clan: clan, nombre: valor, senda: senda, disciplinas: disciplinas, simbolos: getSelectedSimbolos(), habilidad: habilidad, coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl })
+                body: JSON.stringify({ card_type: cardType, layout_id: getLayoutIdValue(), layout_name: getLayoutNameValue(), clan: clan, nombre: valor, senda: senda, disciplinas: disciplinas, simbolos: getSelectedSimbolos(), habilidad: habilidad, coste: (document.getElementById('coste') || {}).value || '', cripta: (document.getElementById('cripta') || {}).value || '', ilustrador: (document.getElementById('ilustrador') || {}).value || '', hab_opacity: parseInt((document.getElementById('hab-opacity') || {}).value || '180'), hab_font_size: parseInt((document.getElementById('hab-font-size') || {}).value || '33'), imagen_url: imagenUrl, dynamic_habilidad_from_bottom: cardType === 'cripta' })
             })
             .then(function(response) { return response.json(); })
             .then(function(data) {

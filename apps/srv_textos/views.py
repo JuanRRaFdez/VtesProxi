@@ -136,6 +136,14 @@ def _resolve_font_path(font_path):
     return os.path.join(settings.BASE_DIR, font_path)
 
 
+def _coerce_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in ('1', 'true', 'yes', 'on')
+    return bool(value)
+
+
 def _measure_text_width(font, text):
     bbox = font.getbbox(text or '')
     return bbox[2] - bbox[0]
@@ -359,7 +367,7 @@ def _resolve_global_collisions(metrics, card_height):
     return resolved
 
 
-def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='', ilustrador='', disciplinas=None, simbolos=None):
+def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='', ilustrador='', disciplinas=None, simbolos=None, dynamic_habilidad_from_bottom=False):
     normalized_card_type = _normalize_card_type(card_type)
     raw_lay = config if isinstance(config, dict) else {}
     lay = normalize_layout_config(normalized_card_type, config)
@@ -447,10 +455,18 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         padding=int(lh.get('bg_padding', 19) or 19),
     )
 
-    if has_habilidad_box:
+    is_dynamic_bottom_anchor = (
+        bool(dynamic_habilidad_from_bottom)
+        and normalized_card_type == 'cripta'
+        and has_habilidad_box
+    )
+
+    if is_dynamic_bottom_anchor:
         hab_box_bottom = habilidad_box['y'] + habilidad_box['height']
         used_hab_box_y = max(0, hab_box_bottom - dynamic_hab_box_h)
         used_hab_box_h = max(1, hab_box_bottom - used_hab_box_y)
+    elif has_habilidad_box:
+        used_hab_box_h = min(habilidad_box['height'], dynamic_hab_box_h)
     else:
         fixed_hab_box_h = None
         if 'box_bottom_ratio' in lh:
@@ -464,7 +480,7 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
 
     used_hab_box = {
         'x': habilidad_box['x'],
-        'y': used_hab_box_y if has_habilidad_box else habilidad_box['y'] + max(0, habilidad_box['height'] - used_hab_box_h),
+        'y': used_hab_box_y if is_dynamic_bottom_anchor else habilidad_box['y'] + max(0, habilidad_box['height'] - used_hab_box_h),
         'width': habilidad_box['width'],
         'height': max(1, used_hab_box_h),
     }
@@ -1204,7 +1220,7 @@ def _render_habilidad_text_libreria(image, text, x, y, max_width, font_size, col
 
 
 # --- Helper principal: renderiza TODOS los elementos sobre la imagen base ---
-def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, simbolos=None, habilidad='', coste='', cripta='', ilustrador='', hab_opacity=180, hab_font_size=None, card_type='cripta', layout_name=None, layout_config=None):
+def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, simbolos=None, habilidad='', coste='', cripta='', ilustrador='', hab_opacity=180, hab_font_size=None, card_type='cripta', layout_name=None, layout_config=None, dynamic_habilidad_from_bottom=False):
     """
     Renderiza todos los elementos de la carta sobre la imagen base.
     Cada elemento tiene posición fija e independiente:
@@ -1240,6 +1256,7 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
         ilustrador=ilustrador,
         disciplinas=disciplinas,
         simbolos=simbolos,
+        dynamic_habilidad_from_bottom=dynamic_habilidad_from_bottom,
     )
 
     card_w = lc['width']
@@ -1582,6 +1599,7 @@ def render_nombre(request):
         ilustrador = (data.get('ilustrador') or '').strip()
         hab_opacity = int(data.get('hab_opacity', 180))
         hab_font_size = int(data.get('hab_font_size', 33))
+        dynamic_habilidad_from_bottom = _coerce_bool(data.get('dynamic_habilidad_from_bottom', False))
         card_type = _normalize_card_type(data.get('card_type'))
         layout_name = (data.get('layout_name') or '').strip()
         layout_id = data.get('layout_id')
@@ -1614,6 +1632,7 @@ def render_nombre(request):
             card_type=card_type,
             layout_name=layout_name,
             layout_config=resolved_layout,
+            dynamic_habilidad_from_bottom=dynamic_habilidad_from_bottom,
         )
         if error:
             return JsonResponse({'error': error}, status=404)
@@ -1647,6 +1666,7 @@ def render_clan(request):
         ilustrador = (data.get('ilustrador') or '').strip()
         hab_opacity = int(data.get('hab_opacity', 180))
         hab_font_size = int(data.get('hab_font_size', 33))
+        dynamic_habilidad_from_bottom = _coerce_bool(data.get('dynamic_habilidad_from_bottom', False))
         card_type = _normalize_card_type(data.get('card_type'))
         layout_name = (data.get('layout_name') or '').strip()
         layout_id = data.get('layout_id')
@@ -1679,6 +1699,7 @@ def render_clan(request):
             card_type=card_type,
             layout_name=layout_name,
             layout_config=resolved_layout,
+            dynamic_habilidad_from_bottom=dynamic_habilidad_from_bottom,
         )
         if error:
             return JsonResponse({'error': error}, status=404)
@@ -1712,6 +1733,7 @@ def render_texto(request):
         ilustrador = (data.get('ilustrador') or '').strip()
         hab_opacity = int(data.get('hab_opacity', 180))
         hab_font_size = int(data.get('hab_font_size', 33))
+        dynamic_habilidad_from_bottom = _coerce_bool(data.get('dynamic_habilidad_from_bottom', False))
         card_type = _normalize_card_type(data.get('card_type'))
         layout_name = (data.get('layout_name') or '').strip()
         layout_id = data.get('layout_id')
@@ -1744,6 +1766,7 @@ def render_texto(request):
             card_type=card_type,
             layout_name=layout_name,
             layout_config=resolved_layout,
+            dynamic_habilidad_from_bottom=dynamic_habilidad_from_bottom,
         )
         if error:
             return JsonResponse({'error': error}, status=404)
