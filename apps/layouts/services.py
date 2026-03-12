@@ -275,6 +275,17 @@ def _validate_text_rules(section_name, rules):
         raise LayoutValidationError(f'{section_name}.rules.min_font_size fuera de rango')
 
 
+def _validate_stack_rules(section_name, rules, allowed_anchor_modes):
+    if rules is None:
+        return
+    if not isinstance(rules, dict):
+        raise LayoutValidationError(f'{section_name}.rules debe ser un objeto')
+
+    anchor_mode = rules.get('anchor_mode', 'free')
+    if anchor_mode not in allowed_anchor_modes:
+        raise LayoutValidationError(f'{section_name}.rules.anchor_mode inválido')
+
+
 def validate_layout_config(card_type, config):
     if not isinstance(config, dict):
         raise LayoutValidationError('config debe ser un objeto JSON')
@@ -323,6 +334,7 @@ def validate_layout_config(card_type, config):
     _expect_number(disciplinas, 'x', 0, 3000)
     _expect_number(disciplinas, 'bottom', 0, 3000)
     _expect_number(disciplinas, 'spacing', 0, 1000)
+    _validate_stack_rules('disciplinas', disciplinas.get('rules'), {'free', 'fixed_bottom'})
 
     habilidad = normalized['habilidad']
     _expect_number(habilidad, 'font_size', 8, 200)
@@ -369,6 +381,7 @@ def validate_layout_config(card_type, config):
         _expect_number(simbolos, 'x', 0, 3000)
         _expect_number(simbolos, 'y', 0, 3000)
         _expect_number(simbolos, 'spacing', 0, 1000)
+        _validate_stack_rules('simbolos', simbolos.get('rules'), {'free'})
 
     return normalized
 

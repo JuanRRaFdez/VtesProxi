@@ -346,7 +346,7 @@ def _resolve_global_collisions(metrics, card_height):
         anchor_mode = section.get('anchor_mode', 'free')
         if section.get('source') == 'box' and anchor_mode == 'free':
             continue
-        if anchor_mode == 'bottom_locked':
+        if anchor_mode in ('bottom_locked', 'fixed_bottom'):
             continue
 
         min_y = 0
@@ -497,7 +497,10 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         'width': int(ld.get('size', 64) or 64) if isinstance(ld, dict) else 64,
         'height': int((ld.get('spacing', 80) or 80) * max(1, len(disciplinas or []))) if isinstance(ld, dict) else 200,
     })
-    disc_box['y'] = max(0, used_hab_box['y'] - disc_box['height'])
+    disc_rules = ld.get('rules') if isinstance(ld.get('rules'), dict) else {}
+    disc_anchor_mode = disc_rules.get('anchor_mode', 'free')
+    if disc_anchor_mode != 'fixed_bottom':
+        disc_box['y'] = max(0, used_hab_box['y'] - disc_box['height'])
     disc_size, disc_spacing = _compute_disc_metrics_from_box(disc_box, icon_count=len(disciplinas or []))
 
     simbolos_box = None
@@ -566,7 +569,7 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
             'box': disc_box,
             'size': disc_size,
             'spacing': disc_spacing,
-            'anchor_mode': (ld.get('rules') or {}).get('anchor_mode', 'free') if isinstance(ld, dict) else 'free',
+            'anchor_mode': disc_anchor_mode if isinstance(ld, dict) else 'free',
             'source': 'box' if has_disc_box else 'legacy',
         },
         'coste': {

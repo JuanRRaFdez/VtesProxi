@@ -619,6 +619,34 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
         self.assertEqual(metrics['disciplinas']['size'], 72)
         self.assertEqual(metrics['disciplinas']['spacing'], 70)
 
+    def test_disciplinas_fixed_bottom_preserves_configured_bottom_edge(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['habilidad']['box'] = {
+            'x': 140,
+            'y': 780,
+            'width': 420,
+            'height': 140,
+        }
+        config['disciplinas']['box'] = {
+            'x': 24,
+            'y': 620,
+            'width': 70,
+            'height': 210,
+        }
+        config['disciplinas']['rules'] = {'anchor_mode': 'fixed_bottom'}
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'cripta',
+            'Texto corto',
+            disciplinas=[{'name': 'ani', 'level': 'inf'}, {'name': 'for', 'level': 'inf'}, {'name': 'pot', 'level': 'inf'}],
+        )
+
+        self.assertEqual(
+            metrics['disciplinas']['box']['y'] + metrics['disciplinas']['box']['height'],
+            830,
+        )
+
 
 class RenderClanContextTests(TestCase):
     def test_render_clan_propagates_dynamic_habilidad_from_bottom(self):
@@ -682,6 +710,20 @@ class GlobalCollisionResolverTests(SimpleTestCase):
 
         self.assertEqual(resolved['disciplinas']['box']['y'], 680)
         self.assertEqual(resolved['ilustrador']['box']['y'], 760)
+
+    def test_collision_resolver_keeps_fixed_bottom_boxes_in_place(self):
+        metrics = {
+            'habilidad': {'box': {'x': 150, 'y': 600, 'width': 400, 'height': 300}, 'source': 'box'},
+            'disciplinas': {
+                'box': {'x': 40, 'y': 680, 'width': 90, 'height': 260},
+                'anchor_mode': 'fixed_bottom',
+                'source': 'box',
+            },
+        }
+
+        resolved = srv_textos_views._resolve_global_collisions(metrics, card_height=1040)
+
+        self.assertEqual(resolved['disciplinas']['box']['y'], 680)
 
 
 class CriptaBoxMetricsTests(SimpleTestCase):

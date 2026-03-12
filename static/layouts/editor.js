@@ -23,6 +23,7 @@
     const propAutoshrinkEnabled = document.getElementById('prop-autoshrink-enabled');
     const propEllipsisEnabled = document.getElementById('prop-ellipsis-enabled');
     const propShadowEnabled = document.getElementById('prop-shadow-enabled');
+    const propDisciplinasFixed = document.getElementById('prop-disciplinas-fixed');
     const applyButton = document.getElementById('apply-properties');
 
     const initialLayouts = JSON.parse((document.getElementById('layout-initial-layouts') || { textContent: '[]' }).textContent || '[]');
@@ -212,6 +213,7 @@
 
     function updateAdvancedInputs(layerName, section) {
         const isTextLayer = textRuleLayers.includes(layerName);
+        const isDisciplinasLayer = layerName === 'disciplinas';
         const advancedInputs = [
             propAlign,
             propAnchorMode,
@@ -223,8 +225,23 @@
         advancedInputs.forEach(function (input) {
             input.disabled = !isTextLayer;
         });
+        propDisciplinasFixed.disabled = !isDisciplinasLayer;
 
-        if (!isTextLayer || !section) {
+        if (!section) {
+            propAlign.value = 'left';
+            propAnchorMode.value = 'free';
+            propMinFontSize.value = '';
+            propAutoshrinkEnabled.checked = false;
+            propEllipsisEnabled.checked = false;
+            propShadowEnabled.checked = false;
+            propDisciplinasFixed.checked = false;
+            return;
+        }
+
+        ensureSectionRules(layerName, section);
+        propDisciplinasFixed.checked = section.rules.anchor_mode === 'fixed_bottom';
+
+        if (!isTextLayer) {
             propAlign.value = 'left';
             propAnchorMode.value = 'free';
             propMinFontSize.value = '';
@@ -234,7 +251,6 @@
             return;
         }
 
-        ensureSectionRules(layerName, section);
         ensureSectionShadow(section);
         propAlign.value = section.rules.align;
         propAnchorMode.value = section.rules.anchor_mode;
@@ -387,7 +403,11 @@
         if (!section.rules || typeof section.rules !== 'object') {
             section.rules = {};
         }
-        section.rules.anchor_mode = propAnchorMode.value || 'free';
+        if (layerName === 'disciplinas') {
+            section.rules.anchor_mode = propDisciplinasFixed.checked ? 'fixed_bottom' : 'free';
+        } else {
+            section.rules.anchor_mode = propAnchorMode.value || 'free';
+        }
 
         if (!textRuleLayers.includes(layerName)) {
             return;

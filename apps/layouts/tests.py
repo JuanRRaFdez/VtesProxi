@@ -246,6 +246,13 @@ class LayoutConfigValidationV2Tests(TestCase):
         with self.assertRaises(LayoutValidationError):
             validate_layout_config('cripta', config)
 
+    def test_validate_rejects_invalid_disciplinas_anchor_mode(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['disciplinas']['rules'] = {'anchor_mode': 'diagonal'}
+
+        with self.assertRaises(LayoutValidationError):
+            validate_layout_config('cripta', config)
+
 
 class LayoutManagementApiTests(TestCase):
     def setUp(self):
@@ -436,6 +443,14 @@ class LayoutEditorAdvancedControlsTests(TestCase):
         self.assertContains(response, 'id="prop-min-font-size"')
         self.assertContains(response, 'id="prop-ellipsis-enabled"')
 
+    def test_editor_contains_fixed_disciplinas_control(self):
+        user = get_user_model().objects.create_user(username='disc-ui', password='secret')
+        self.client.force_login(user)
+
+        response = self.client.get('/layouts/')
+
+        self.assertContains(response, 'id="prop-disciplinas-fixed"')
+
 
 class LayoutEditorStaticAssetTests(SimpleTestCase):
     def test_editor_script_defines_semantic_layer_profiles(self):
@@ -455,6 +470,12 @@ class LayoutEditorStaticAssetTests(SimpleTestCase):
 
         self.assertIn('background: transparent', stylesheet)
         self.assertIn('border: 0', stylesheet)
+
+    def test_editor_script_defines_fixed_bottom_disciplinas_toggle(self):
+        script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')
+
+        self.assertIn('prop-disciplinas-fixed', script)
+        self.assertIn('fixed_bottom', script)
 
 
 class EndToEndLayoutFlowTests(TestCase):
