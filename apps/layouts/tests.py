@@ -372,15 +372,15 @@ class LayoutPreviewApiTests(TestCase):
         )
 
         preview_payload = {
-            'nombre': '.44 Magnum',
-            'clan': '',
-            'senda': '',
-            'coste': 'pool2',
+            'nombre': 'Payload Catalogo',
+            'clan': 'tremere.png',
+            'senda': 'evil.png',
+            'coste': 'blood4',
             'cripta': '',
-            'ilustrador': '',
-            'habilidad': 'Texto',
-            'disciplinas': [],
-            'simbolos': ['equipment'],
+            'ilustrador': 'Catalog Artist',
+            'habilidad': 'Texto del catalogo',
+            'disciplinas': [{'name': 'ani', 'level': 'inf'}],
+            'simbolos': ['event'],
         }
         with patch('apps.layouts.views.get_card_autocomplete', create=True, return_value=preview_payload), patch(
             'apps.layouts.views._render_carta_from_path',
@@ -395,9 +395,10 @@ class LayoutPreviewApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['imagen_url'], '/media/render/44magnum-preview.png')
-        self.assertEqual(mock_render.call_args.kwargs['nombre'], '.44 Magnum')
+        self.assertEqual(mock_render.call_args.kwargs['nombre'], 'Muestra de Libreria')
         self.assertEqual(mock_render.call_args.kwargs['clan'], 'gangrel.png')
         self.assertEqual(mock_render.call_args.kwargs['senda'], 'death.png')
+        self.assertEqual(mock_render.call_args.kwargs['coste'], 'pool2')
         self.assertEqual(
             mock_render.call_args.kwargs['disciplinas'],
             [
@@ -405,6 +406,11 @@ class LayoutPreviewApiTests(TestCase):
                 {'name': 'dom', 'level': 'inf'},
                 {'name': 'tha', 'level': 'inf'},
             ],
+        )
+        self.assertEqual(mock_render.call_args.kwargs['simbolos'], ['action', 'equipment'])
+        self.assertEqual(
+            mock_render.call_args.kwargs['habilidad'],
+            'Texto de referencia para ajustar el layout de libreria.',
         )
         self.assertEqual(mock_render.call_args.kwargs['ilustrador'], 'Crafted with AI')
         self.assertEqual(mock_render.call_args.kwargs['card_type'], 'libreria')

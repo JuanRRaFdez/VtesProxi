@@ -23,13 +23,17 @@ FIXED_LAYOUT_PREVIEWS = {
     'libreria': {
         'card_name': '.44 Magnum',
         'image_path': 'static/layouts/images/44. magnum.png',
+        'nombre': 'Muestra de Libreria',
         'clan': 'gangrel.png',
         'path': 'death.png',
+        'coste': 'pool2',
         'disciplinas': [
             {'name': 'ofu', 'level': 'inf'},
             {'name': 'dom', 'level': 'inf'},
             {'name': 'tha', 'level': 'inf'},
         ],
+        'simbolos': ['action', 'equipment'],
+        'habilidad': 'Texto de referencia para ajustar el layout de libreria.',
         'illustrator': 'Crafted with AI',
     },
 }
@@ -148,13 +152,13 @@ def api_preview(request):
     imagen_abspath = os.path.join(settings.BASE_DIR, preview['image_path'])
     render_url, error = _render_carta_from_path(
         imagen_abspath=imagen_abspath,
-        nombre=preview_payload.get('nombre', preview['card_name']),
+        nombre=preview.get('nombre', preview_payload.get('nombre', preview['card_name'])),
         clan=preview.get('clan', preview_payload.get('clan', '')),
         senda=preview.get('path', preview_payload.get('senda', '')),
         disciplinas=preview.get('disciplinas', preview_payload.get('disciplinas') or []),
-        simbolos=preview_payload.get('simbolos') or [],
-        habilidad=preview_payload.get('habilidad', ''),
-        coste=preview_payload.get('coste', ''),
+        simbolos=preview.get('simbolos', preview_payload.get('simbolos') or []),
+        habilidad=preview.get('habilidad', preview_payload.get('habilidad', '')),
+        coste=preview.get('coste', preview_payload.get('coste', '')),
         cripta=preview_payload.get('cripta', ''),
         ilustrador=preview['illustrator'],
         card_type=card_type,
