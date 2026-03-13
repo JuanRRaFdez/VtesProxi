@@ -506,16 +506,19 @@ class LayoutEditorStaticAssetTests(SimpleTestCase):
         self.assertIn('fixedFont: true', script)
         self.assertIn('square: true', script)
 
-    def test_editor_script_does_not_create_visible_layer_labels(self):
+    def test_editor_script_creates_visible_layer_labels(self):
         script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')
 
-        self.assertNotIn('layout-layer-label', script)
+        self.assertIn('layout-layer__label', script)
+        self.assertIn("label.textContent = layerName", script)
 
-    def test_editor_css_keeps_overlays_invisible_until_selected(self):
+    def test_editor_css_defines_visible_labeled_overlays(self):
         stylesheet = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.css').read_text(encoding='utf-8')
 
-        self.assertIn('background: transparent', stylesheet)
-        self.assertIn('border: 0', stylesheet)
+        self.assertIn('.layout-layer__label', stylesheet)
+        self.assertIn('border: 2px solid', stylesheet)
+        self.assertIn('background: rgba(', stylesheet)
+        self.assertIn('pointer-events: none', stylesheet)
 
     def test_editor_script_defines_fixed_bottom_disciplinas_toggle(self):
         script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')

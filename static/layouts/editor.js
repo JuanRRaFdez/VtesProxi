@@ -470,6 +470,11 @@
             layer.style.height = frame.height + 'px';
             layer.style.cursor = profile.resizable ? 'move' : 'grab';
 
+            const label = document.createElement('span');
+            label.className = 'layout-layer__label';
+            label.textContent = layerName;
+            layer.appendChild(label);
+
             layer.addEventListener('click', function () {
                 setActiveLayer(layerName);
             });
