@@ -210,6 +210,50 @@ def _ensure_square_coste_section(normalized):
         section['left'] = box['x']
 
 
+def _ensure_cripta_disciplina_anchor_section(normalized):
+    section = normalized.get('disciplinas')
+    if not isinstance(section, dict):
+        return
+
+    carta = normalized.get('carta') or {}
+    card_height = int(carta.get('height', 1040) or 1040)
+    size = max(1, int(section.get('size', 64) or 64))
+    spacing = max(1, int(section.get('spacing', 80) or 80))
+
+    rules = section.get('rules')
+    if not isinstance(rules, dict):
+        rules = {}
+        section['rules'] = rules
+    has_anchor_gap = 'gap_from_habilidad' in rules
+    rules.setdefault('anchor_mode', 'free')
+    rules.setdefault('gap_from_habilidad', 0)
+
+    raw_box = section.get('box')
+    if isinstance(raw_box, dict):
+        anchor_x = int(raw_box.get('x', section.get('x', 0) or 0))
+        if has_anchor_gap:
+            anchor_y = int(raw_box.get('y', section.get('y', 0) or 0) or 0)
+            size = max(1, int(raw_box.get('width', size) or size))
+            spacing = max(1, int(raw_box.get('height', spacing) or spacing))
+        else:
+            anchor_y = int(raw_box.get('y', 0) or 0) + int(raw_box.get('height', spacing) or spacing)
+    else:
+        anchor_x = int(section.get('x', 0) or 0)
+        anchor_y = max(0, card_height - int(section.get('bottom', 0) or 0))
+
+    section['box'] = {
+        'x': anchor_x,
+        'y': anchor_y,
+        'width': size,
+        'height': spacing,
+    }
+    section['x'] = anchor_x
+    section['y'] = anchor_y
+    section['size'] = size
+    section['spacing'] = spacing
+    section['bottom'] = max(0, card_height - anchor_y)
+
+
 def _ensure_stack_box_section(normalized, section_name, *, bottom_anchored=False):
     section = normalized.get(section_name)
     if not isinstance(section, dict):
@@ -258,6 +302,7 @@ def normalize_layout_config(card_type, config):
     _ensure_text_v2_section(normalized, 'ilustrador')
     _ensure_square_symbol_section(normalized, 'clan')
     if normalized_card_type == 'cripta':
+        _ensure_cripta_disciplina_anchor_section(normalized)
         _ensure_square_symbol_section(normalized, 'senda')
     else:
         _ensure_stack_box_section(normalized, 'disciplinas', bottom_anchored=True)
@@ -374,7 +419,14 @@ def validate_layout_config(card_type, config):
     _expect_number(disciplinas, 'spacing', 0, 1000)
     if isinstance(disciplinas.get('box'), dict):
         _validate_box('disciplinas', disciplinas)
-    _validate_stack_rules('disciplinas', disciplinas.get('rules'), {'free', 'fixed_bottom'})
+    disc_rules = disciplinas.get('rules')
+    _validate_stack_rules('disciplinas', disc_rules, {'free', 'fixed_bottom'})
+    if normalized_card_type == 'cripta':
+        gap_from_habilidad = (disc_rules or {}).get('gap_from_habilidad', 0)
+        if not _is_number(gap_from_habilidad):
+            raise LayoutValidationError('disciplinas.rules.gap_from_habilidad debe ser numérico')
+        if gap_from_habilidad < 0 or gap_from_habilidad > 3000:
+            raise LayoutValidationError('disciplinas.rules.gap_from_habilidad fuera de rango')
 
     habilidad = normalized['habilidad']
     _expect_number(habilidad, 'font_size', 8, 200)

@@ -278,21 +278,22 @@ def _compute_vertical_stack_positions(box, item_size, spacing, item_count, sourc
     if count == 0:
         return []
 
-    top = int(box.get('y', 0))
-    bottom = top + max(1, int(box.get('height', item_size)))
     item_size = max(1, int(item_size))
     spacing = max(1, int(spacing))
 
     positions = []
     if source == 'box':
-        current_y = top
+        current_bottom = int(box.get('y', 0))
         for _ in range(count):
-            if current_y + item_size > bottom:
+            current_y = current_bottom - item_size
+            if current_y < 0:
                 break
             positions.append(current_y)
-            current_y += spacing
+            current_bottom -= spacing
         return positions
 
+    top = int(box.get('y', 0))
+    bottom = top + max(1, int(box.get('height', item_size)))
     current_y = bottom - item_size
     for _ in range(count):
         if current_y < top:
@@ -490,18 +491,34 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         'height': max(1, used_hab_box_h),
     }
 
-    has_disc_box = isinstance(raw_ld.get('box'), dict)
-    disc_box = _clamp_box(ld.get('box') if has_disc_box and isinstance(ld, dict) else None, {
-        'x': int(ld.get('x', 0) or 0) if isinstance(ld, dict) else 0,
-        'y': max(0, card_h - int(ld.get('bottom', 100) or 100) - int(ld.get('size', 64) or 64)) if isinstance(ld, dict) else 0,
-        'width': int(ld.get('size', 64) or 64) if isinstance(ld, dict) else 64,
-        'height': int((ld.get('spacing', 80) or 80) * max(1, len(disciplinas or []))) if isinstance(ld, dict) else 200,
-    })
     disc_rules = ld.get('rules') if isinstance(ld.get('rules'), dict) else {}
     disc_anchor_mode = disc_rules.get('anchor_mode', 'free')
-    if disc_anchor_mode != 'fixed_bottom':
-        disc_box['y'] = max(0, used_hab_box['y'] - disc_box['height'])
-    disc_size, disc_spacing = _compute_disc_metrics_from_box(disc_box, icon_count=len(disciplinas or []))
+    if normalized_card_type == 'cripta':
+        has_disc_box = isinstance(ld.get('box'), dict)
+        disc_box = _clamp_box(ld.get('box') if has_disc_box and isinstance(ld, dict) else None, {
+            'x': int(ld.get('x', 0) or 0) if isinstance(ld, dict) else 0,
+            'y': max(0, card_h - int(ld.get('bottom', 100) or 100)) if isinstance(ld, dict) else 0,
+            'width': int(ld.get('size', 64) or 64) if isinstance(ld, dict) else 64,
+            'height': int(ld.get('spacing', 80) or 80) if isinstance(ld, dict) else 80,
+        })
+        if disc_anchor_mode == 'fixed_bottom':
+            disc_box['y'] = max(0, int(disc_box['y']))
+        else:
+            gap_from_habilidad = max(0, int(disc_rules.get('gap_from_habilidad', 0) or 0))
+            disc_box['y'] = max(0, used_hab_box['y'] - gap_from_habilidad)
+        disc_size = max(1, int(disc_box['width']))
+        disc_spacing = max(1, int(disc_box['height']))
+    else:
+        has_disc_box = isinstance(raw_ld.get('box'), dict)
+        disc_box = _clamp_box(ld.get('box') if has_disc_box and isinstance(ld, dict) else None, {
+            'x': int(ld.get('x', 0) or 0) if isinstance(ld, dict) else 0,
+            'y': max(0, card_h - int(ld.get('bottom', 100) or 100) - int(ld.get('size', 64) or 64)) if isinstance(ld, dict) else 0,
+            'width': int(ld.get('size', 64) or 64) if isinstance(ld, dict) else 64,
+            'height': int((ld.get('spacing', 80) or 80) * max(1, len(disciplinas or []))) if isinstance(ld, dict) else 200,
+        })
+        if disc_anchor_mode != 'fixed_bottom':
+            disc_box['y'] = max(0, used_hab_box['y'] - disc_box['height'])
+        disc_size, disc_spacing = _compute_disc_metrics_from_box(disc_box, icon_count=len(disciplinas or []))
 
     simbolos_box = None
     simbolos_metrics = None
@@ -1444,7 +1461,7 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
                 item_count=len(all_discs),
                 source=disc_source,
             )
-            disc_images = list(reversed(all_discs)) if disc_source == 'box' else all_discs
+            disc_images = all_discs
             for disc_img, disc_y in zip(disc_images, disc_positions):
                 image.alpha_composite(disc_img, (disc_x, disc_y))
 

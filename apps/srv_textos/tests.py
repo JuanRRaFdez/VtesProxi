@@ -571,7 +571,7 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             400,
         )
 
-    def test_disciplinas_vertical_anchor_is_derived_from_habilidad_used_box(self):
+    def test_disciplinas_vertical_anchor_uses_habilidad_gap_when_free(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))
         config['habilidad']['box'] = {
             'x': 140,
@@ -585,6 +585,7 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             'width': 64,
             'height': 180,
         }
+        config['disciplinas']['rules'] = {'anchor_mode': 'free', 'gap_from_habilidad': 0}
 
         metrics = srv_textos_views._compute_layout_metrics(
             config,
@@ -595,10 +596,22 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
 
         self.assertEqual(metrics['disciplinas']['box']['x'], 30)
         self.assertEqual(metrics['disciplinas']['box']['width'], 64)
-        self.assertEqual(
-            metrics['disciplinas']['box']['y'] + metrics['disciplinas']['box']['height'],
-            metrics['habilidad']['used_box']['y'],
+        self.assertEqual(metrics['disciplinas']['box']['y'], metrics['habilidad']['used_box']['y'])
+
+    def test_disciplinas_free_mode_uses_fixed_gap_from_habilidad(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['habilidad']['box'] = {'x': 140, 'y': 780, 'width': 420, 'height': 140}
+        config['disciplinas']['box'] = {'x': 18, 'y': 90, 'width': 72, 'height': 82}
+        config['disciplinas']['rules'] = {'anchor_mode': 'free', 'gap_from_habilidad': 24}
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'cripta',
+            'Texto corto',
+            disciplinas=[{'name': 'ani', 'level': 'inf'}, {'name': 'for', 'level': 'inf'}, {'name': 'pot', 'level': 'inf'}],
         )
+
+        self.assertEqual(metrics['disciplinas']['box']['y'], metrics['habilidad']['used_box']['y'] - 24)
 
     def test_disciplinas_size_depends_on_box_width_and_spacing_on_box_height(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))
@@ -609,15 +622,30 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             'height': 210,
         }
 
-        metrics = srv_textos_views._compute_layout_metrics(
+        metrics_two = srv_textos_views._compute_layout_metrics(
             config,
             'cripta',
             'Texto corto',
-            disciplinas=[{'name': 'ani', 'level': 'inf'}, {'name': 'for', 'level': 'inf'}, {'name': 'pot', 'level': 'inf'}],
+            disciplinas=[{'name': 'ani', 'level': 'inf'}, {'name': 'for', 'level': 'inf'}],
+        )
+        metrics_six = srv_textos_views._compute_layout_metrics(
+            config,
+            'cripta',
+            'Texto corto',
+            disciplinas=[
+                {'name': 'ani', 'level': 'inf'},
+                {'name': 'for', 'level': 'inf'},
+                {'name': 'pot', 'level': 'inf'},
+                {'name': 'aus', 'level': 'inf'},
+                {'name': 'cel', 'level': 'inf'},
+                {'name': 'dom', 'level': 'inf'},
+            ],
         )
 
-        self.assertEqual(metrics['disciplinas']['size'], 72)
-        self.assertEqual(metrics['disciplinas']['spacing'], 70)
+        self.assertEqual(metrics_two['disciplinas']['size'], 72)
+        self.assertEqual(metrics_two['disciplinas']['spacing'], 210)
+        self.assertEqual(metrics_six['disciplinas']['size'], 72)
+        self.assertEqual(metrics_six['disciplinas']['spacing'], 210)
 
     def test_disciplinas_fixed_bottom_preserves_configured_bottom_edge(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))
@@ -631,9 +659,9 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             'x': 24,
             'y': 620,
             'width': 70,
-            'height': 210,
+            'height': 82,
         }
-        config['disciplinas']['rules'] = {'anchor_mode': 'fixed_bottom'}
+        config['disciplinas']['rules'] = {'anchor_mode': 'fixed_bottom', 'gap_from_habilidad': 0}
 
         metrics = srv_textos_views._compute_layout_metrics(
             config,
@@ -642,10 +670,18 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             disciplinas=[{'name': 'ani', 'level': 'inf'}, {'name': 'for', 'level': 'inf'}, {'name': 'pot', 'level': 'inf'}],
         )
 
-        self.assertEqual(
-            metrics['disciplinas']['box']['y'] + metrics['disciplinas']['box']['height'],
-            830,
+        self.assertEqual(metrics['disciplinas']['box']['y'], 620)
+
+    def test_cripta_explicit_box_starts_stack_from_bottom_anchor(self):
+        positions = srv_textos_views._compute_vertical_stack_positions(
+            box={'x': 10, 'y': 190, 'width': 90, 'height': 90},
+            item_size=80,
+            spacing=90,
+            item_count=2,
+            source='box',
         )
+
+        self.assertEqual(positions, [110, 20])
 
 
 class RenderClanContextTests(TestCase):
@@ -759,7 +795,7 @@ class CriptaBoxMetricsTests(SimpleTestCase):
 
 
 class VerticalStackPositionTests(SimpleTestCase):
-    def test_explicit_box_starts_stack_from_top(self):
+    def test_explicit_box_starts_stack_from_bottom_anchor(self):
         positions = srv_textos_views._compute_vertical_stack_positions(
             box={'x': 10, 'y': 100, 'width': 90, 'height': 260},
             item_size=80,
@@ -768,7 +804,7 @@ class VerticalStackPositionTests(SimpleTestCase):
             source='box',
         )
 
-        self.assertEqual(positions, [100, 190])
+        self.assertEqual(positions, [20])
 
 
 class BoxEngineRenderRegressionTests(TestCase):

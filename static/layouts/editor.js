@@ -200,6 +200,9 @@
         if (section.rules.ellipsis_enabled == null) {
             section.rules.ellipsis_enabled = true;
         }
+        if (layerName === 'disciplinas' && section.rules.gap_from_habilidad == null) {
+            section.rules.gap_from_habilidad = 0;
+        }
     }
 
     function ensureSectionShadow(section) {
@@ -209,6 +212,21 @@
         if (section.shadow.enabled == null) {
             section.shadow.enabled = false;
         }
+    }
+
+    function getHabilidadTop(carta) {
+        const cardHeight = Number(carta.height || 1040);
+        const habilidad = state.config && state.config.habilidad && typeof state.config.habilidad === 'object'
+            ? state.config.habilidad
+            : {};
+
+        if (habilidad.box && typeof habilidad.box === 'object') {
+            return Math.max(0, Math.round(Number(habilidad.box.y || 0)));
+        }
+        if (habilidad.y_ratio != null) {
+            return Math.max(0, Math.round(cardHeight * Number(habilidad.y_ratio || 0)));
+        }
+        return Math.max(0, Math.round(Number(habilidad.y || 0)));
     }
 
     function updateAdvancedInputs(layerName, section) {
@@ -263,6 +281,31 @@
     function frameFromSection(layerName, section, carta) {
         const cardWidth = Number(carta.width || 745);
         const cardHeight = Number(carta.height || 1040);
+        if (layerName === 'disciplinas' && state.cardType === 'cripta') {
+            ensureSectionRules(layerName, section);
+            const rawBox = section.box && typeof section.box === 'object' ? section.box : {};
+            const spacing = Math.max(30, Math.round(Number(rawBox.height || section.spacing || 80)));
+            const width = Math.max(30, Math.round(Number(rawBox.width || section.size || 64)));
+            const anchorX = Math.max(0, Math.round(Number(rawBox.x != null ? rawBox.x : (section.x || 0))));
+            const storedAnchorY = Math.max(
+                0,
+                Math.round(Number(
+                    rawBox.y != null ? rawBox.y : (
+                        section.y != null ? section.y : (cardHeight - Number(section.bottom || 0))
+                    )
+                )),
+            );
+            const anchorY = section.rules.anchor_mode === 'fixed_bottom'
+                ? storedAnchorY
+                : Math.max(0, getHabilidadTop(carta) - Math.max(0, Math.round(Number(section.rules.gap_from_habilidad || 0))));
+
+            return normalizeFrameForLayer(layerName, {
+                x: anchorX,
+                y: Math.max(0, anchorY - spacing),
+                width: width,
+                height: spacing,
+            });
+        }
         if (section.box && typeof section.box === 'object') {
             return normalizeFrameForLayer(layerName, {
                 x: Math.max(0, Math.round(Number(section.box.x || 0))),
@@ -323,6 +366,27 @@
         const cardHeight = Number(carta.height || 1040);
         const normalizedFrame = normalizeFrameForLayer(layerName, frame);
         const profile = profileForLayer(layerName);
+        if (layerName === 'disciplinas' && state.cardType === 'cripta') {
+            ensureSectionRules(layerName, section);
+            const anchorY = Math.max(0, Math.round(normalizedFrame.y + normalizedFrame.height));
+            section.x = Math.round(normalizedFrame.x);
+            section.y = anchorY;
+            section.box = {
+                x: Math.round(normalizedFrame.x),
+                y: anchorY,
+                width: Math.max(30, Math.round(normalizedFrame.width)),
+                height: Math.max(30, Math.round(normalizedFrame.height)),
+            };
+            section.size = section.box.width;
+            section.spacing = section.box.height;
+            section.bottom = Math.max(0, Math.round(cardHeight - anchorY));
+            if (section.rules.anchor_mode === 'fixed_bottom') {
+                section.rules.gap_from_habilidad = Math.max(0, Math.round(Number(section.rules.gap_from_habilidad || 0)));
+            } else {
+                section.rules.gap_from_habilidad = Math.max(0, Math.round(getHabilidadTop(carta) - anchorY));
+            }
+            return;
+        }
         section.x = Math.round(normalizedFrame.x);
         section.y = Math.round(normalizedFrame.y);
         section.box = {
@@ -363,11 +427,23 @@
         }
     }
 
-    function updatePropertyInputs(frame) {
-        propX.value = frame ? frame.x : '';
-        propY.value = frame ? frame.y : '';
-        propWidth.value = frame ? frame.width : '';
-        propHeight.value = frame ? frame.height : '';
+    function updatePropertyInputs(layerName, frame) {
+        if (!frame) {
+            propX.value = '';
+            propY.value = '';
+            propWidth.value = '';
+            propHeight.value = '';
+            return;
+        }
+
+        propX.value = frame.x;
+        propWidth.value = frame.width;
+        propHeight.value = frame.height;
+        if (layerName === 'disciplinas' && state.cardType === 'cripta') {
+            propY.value = frame.y + frame.height;
+            return;
+        }
+        propY.value = frame.y;
     }
 
     function setActiveLayer(layerName) {
@@ -378,7 +454,7 @@
 
         if (!layerName) {
             selectedNameEl.textContent = 'Selecciona una capa';
-            updatePropertyInputs(null);
+            updatePropertyInputs(null, null);
             updateAdvancedInputs(null, null);
             return;
         }
@@ -386,12 +462,12 @@
         selectedNameEl.textContent = layerName;
         const section = sectionForLayer(layerName);
         if (!section) {
-            updatePropertyInputs(null);
+            updatePropertyInputs(null, null);
             updateAdvancedInputs(null, null);
             return;
         }
         const frame = frameFromSection(layerName, section, state.config.carta || {});
-        updatePropertyInputs(frame);
+        updatePropertyInputs(layerName, frame);
         updateAdvancedInputs(layerName, section);
     }
 
@@ -404,7 +480,15 @@
             section.rules = {};
         }
         if (layerName === 'disciplinas') {
-            section.rules.anchor_mode = propDisciplinasFixed.checked ? 'fixed_bottom' : 'free';
+            const nextAnchorMode = propDisciplinasFixed.checked ? 'fixed_bottom' : 'free';
+            ensureSectionRules(layerName, section);
+            if (nextAnchorMode !== 'fixed_bottom') {
+                const anchorY = section.box && typeof section.box === 'object'
+                    ? Number(section.box.y || 0)
+                    : Number(section.y || 0);
+                section.rules.gap_from_habilidad = Math.max(0, Math.round(getHabilidadTop(state.config.carta || {}) - anchorY));
+            }
+            section.rules.anchor_mode = nextAnchorMode;
         } else {
             section.rules.anchor_mode = propAnchorMode.value || 'free';
         }
@@ -580,12 +664,20 @@
             return;
         }
 
-        const frame = {
+        let frame = {
             x: Number(propX.value || 0),
             y: Number(propY.value || 0),
             width: Number(propWidth.value || 50),
             height: Number(propHeight.value || 50),
         };
+        if (state.selectedLayer === 'disciplinas' && state.cardType === 'cripta') {
+            frame = {
+                x: frame.x,
+                y: frame.y - frame.height,
+                width: frame.width,
+                height: frame.height,
+            };
+        }
         applyFrameToSection(state.selectedLayer, section, frame, state.config.carta || {});
         applyAdvancedProperties(state.selectedLayer, section);
         renderLayers();

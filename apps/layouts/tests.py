@@ -265,6 +265,14 @@ class LayoutConfigBoxSchemaTests(TestCase):
         self.assertEqual(normalized['nombre']['rules']['align'], 'center')
         self.assertEqual(normalized['ilustrador']['rules']['align'], 'left')
 
+    def test_normalize_cripta_materializes_disciplina_anchor_box(self):
+        normalized = normalize_layout_config('cripta', load_classic_seed('cripta'))
+
+        self.assertEqual(normalized['disciplinas']['box']['x'], normalized['disciplinas']['x'])
+        self.assertEqual(normalized['disciplinas']['box']['width'], normalized['disciplinas']['size'])
+        self.assertEqual(normalized['disciplinas']['box']['height'], normalized['disciplinas']['spacing'])
+        self.assertEqual(normalized['disciplinas']['rules']['gap_from_habilidad'], 0)
+
     def test_normalize_libreria_materializes_box_for_disciplinas(self):
         normalized = normalize_layout_config('libreria', load_classic_seed('libreria'))
 
@@ -303,6 +311,13 @@ class LayoutConfigValidationV2Tests(TestCase):
     def test_validate_rejects_invalid_disciplinas_anchor_mode(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))
         config['disciplinas']['rules'] = {'anchor_mode': 'diagonal'}
+
+        with self.assertRaises(LayoutValidationError):
+            validate_layout_config('cripta', config)
+
+    def test_validate_rejects_invalid_cripta_disciplinas_gap_from_habilidad(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['disciplinas']['rules']['gap_from_habilidad'] = -1
 
         with self.assertRaises(LayoutValidationError):
             validate_layout_config('cripta', config)
@@ -525,6 +540,14 @@ class LayoutEditorStaticAssetTests(SimpleTestCase):
 
         self.assertIn('prop-disciplinas-fixed', script)
         self.assertIn('fixed_bottom', script)
+
+    def test_editor_script_persists_cripta_disciplina_anchor_and_gap(self):
+        script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')
+
+        self.assertIn('section.rules.gap_from_habilidad', script)
+        self.assertIn('normalizedFrame.y + normalizedFrame.height', script)
+        self.assertIn('propY.value = frame.y + frame.height', script)
+        self.assertIn('getHabilidadTop', script)
 
 
 class EndToEndLayoutFlowTests(TestCase):
