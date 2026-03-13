@@ -1266,7 +1266,7 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     layout_scope = lay.get('libreria', {}) if card_type == 'libreria' else lay
     ln  = layout_scope.get('nombre') or lay.get('nombre')
     lcl = layout_scope.get('clan') or lay.get('clan')
-    ls  = layout_scope.get('senda')
+    ls  = layout_scope.get('senda') or lay.get('senda')
     ld  = layout_scope.get('disciplinas') or lay.get('disciplinas')
     lsi = (layout_scope.get('simbolos') or lay.get('simbolos')) if card_type == 'libreria' else None
     lh  = layout_scope.get('habilidad') or lay.get('habilidad')
