@@ -323,7 +323,7 @@ class LayoutPreviewApiTests(TestCase):
         self.user = get_user_model().objects.create_user(username='preview-user', password='secret')
         self.client.force_login(self.user)
 
-    def test_preview_for_cripta_uses_fixed_mimir_payload(self):
+    def test_preview_for_cripta_returns_clean_fixed_source(self):
         layout = UserLayout.objects.create(
             user=self.user,
             name='Preview Cripta',
@@ -332,21 +332,13 @@ class LayoutPreviewApiTests(TestCase):
             is_default=False,
         )
 
-        preview_payload = {
-            'nombre': 'Mimir',
-            'clan': 'gangrel.png',
-            'senda': '',
-            'coste': '8',
-            'cripta': '5',
-            'ilustrador': '',
-            'habilidad': 'Texto',
-            'disciplinas': [{'name': 'ani', 'level': 'inf'}],
-            'simbolos': [],
-        }
-        with patch('apps.layouts.views.get_card_autocomplete', create=True, return_value=preview_payload), patch(
+        with patch(
+            'apps.layouts.views._prepare_render_source_from_path',
+            create=True,
+            return_value='/media/layout_preview_sources/mimir.png',
+        ) as mock_prepare, patch(
             'apps.layouts.views._render_carta_from_path',
             create=True,
-            return_value=('/media/render/mimir-preview.png', None),
         ) as mock_render:
             response = self.client.post(
                 '/layouts/api/preview',
@@ -355,14 +347,12 @@ class LayoutPreviewApiTests(TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['imagen_url'], '/media/render/mimir-preview.png')
-        self.assertEqual(mock_render.call_args.kwargs['nombre'], 'Mimir')
-        self.assertEqual(mock_render.call_args.kwargs['senda'], 'caine.png')
-        self.assertEqual(mock_render.call_args.kwargs['ilustrador'], 'Crafted with AI')
-        self.assertEqual(mock_render.call_args.kwargs['card_type'], 'cripta')
-        self.assertTrue(mock_render.call_args.kwargs['imagen_abspath'].endswith('static/layouts/images/Mimir.png'))
+        self.assertEqual(response.json()['imagen_url'], '/media/layout_preview_sources/mimir.png')
+        self.assertTrue(mock_prepare.call_args.args[0].endswith('static/layouts/images/Mimir.png'))
+        self.assertEqual(mock_prepare.call_args.kwargs['target_name'], 'Mimir')
+        mock_render.assert_not_called()
 
-    def test_preview_for_libreria_uses_fixed_44_magnum_payload(self):
+    def test_preview_for_libreria_returns_clean_fixed_source(self):
         layout = UserLayout.objects.create(
             user=self.user,
             name='Preview Libreria',
@@ -371,21 +361,13 @@ class LayoutPreviewApiTests(TestCase):
             is_default=False,
         )
 
-        preview_payload = {
-            'nombre': 'Payload Catalogo',
-            'clan': 'tremere.png',
-            'senda': 'evil.png',
-            'coste': 'blood4',
-            'cripta': '',
-            'ilustrador': 'Catalog Artist',
-            'habilidad': 'Texto del catalogo',
-            'disciplinas': [{'name': 'ani', 'level': 'inf'}],
-            'simbolos': ['event'],
-        }
-        with patch('apps.layouts.views.get_card_autocomplete', create=True, return_value=preview_payload), patch(
+        with patch(
+            'apps.layouts.views._prepare_render_source_from_path',
+            create=True,
+            return_value='/media/layout_preview_sources/muestra-de-libreria.png',
+        ) as mock_prepare, patch(
             'apps.layouts.views._render_carta_from_path',
             create=True,
-            return_value=('/media/render/44magnum-preview.png', None),
         ) as mock_render:
             response = self.client.post(
                 '/layouts/api/preview',
@@ -394,27 +376,10 @@ class LayoutPreviewApiTests(TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['imagen_url'], '/media/render/44magnum-preview.png')
-        self.assertEqual(mock_render.call_args.kwargs['nombre'], 'Muestra de Libreria')
-        self.assertEqual(mock_render.call_args.kwargs['clan'], 'gangrel.png')
-        self.assertEqual(mock_render.call_args.kwargs['senda'], 'death.png')
-        self.assertEqual(mock_render.call_args.kwargs['coste'], 'pool2')
-        self.assertEqual(
-            mock_render.call_args.kwargs['disciplinas'],
-            [
-                {'name': 'ofu', 'level': 'inf'},
-                {'name': 'dom', 'level': 'inf'},
-                {'name': 'tha', 'level': 'inf'},
-            ],
-        )
-        self.assertEqual(mock_render.call_args.kwargs['simbolos'], ['action', 'equipment'])
-        self.assertEqual(
-            mock_render.call_args.kwargs['habilidad'],
-            'Texto de referencia para ajustar el layout de libreria.',
-        )
-        self.assertEqual(mock_render.call_args.kwargs['ilustrador'], 'Crafted with AI')
-        self.assertEqual(mock_render.call_args.kwargs['card_type'], 'libreria')
-        self.assertTrue(mock_render.call_args.kwargs['imagen_abspath'].endswith('static/layouts/images/44. magnum.png'))
+        self.assertEqual(response.json()['imagen_url'], '/media/layout_preview_sources/muestra-de-libreria.png')
+        self.assertTrue(mock_prepare.call_args.args[0].endswith('static/layouts/images/44. magnum.png'))
+        self.assertEqual(mock_prepare.call_args.kwargs['target_name'], '.44 Magnum')
+        mock_render.assert_not_called()
 
 
 class LayoutEditorTemplateTests(TestCase):

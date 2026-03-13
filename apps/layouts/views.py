@@ -9,8 +9,7 @@ from django.shortcuts import get_object_or_404, render
 
 from apps.layouts.models import UserLayout
 from apps.layouts.services import LayoutValidationError, load_classic_seed, validate_layout_config
-from apps.srv_textos.card_catalog import get_card_autocomplete
-from apps.srv_textos.views import _render_carta_from_path
+from apps.srv_textos.views import _prepare_render_source_from_path
 
 
 FIXED_LAYOUT_PREVIEWS = {
@@ -145,29 +144,15 @@ def api_preview(request):
         return JsonResponse({'error': str(exc)}, status=400)
 
     preview = FIXED_LAYOUT_PREVIEWS[card_type]
-    preview_payload = get_card_autocomplete(card_type, preview['card_name'])
-    if preview_payload is None:
-        return JsonResponse({'error': 'Carta de preview no encontrada'}, status=404)
-
     imagen_abspath = os.path.join(settings.BASE_DIR, preview['image_path'])
-    render_url, error = _render_carta_from_path(
-        imagen_abspath=imagen_abspath,
-        nombre=preview.get('nombre', preview_payload.get('nombre', preview['card_name'])),
-        clan=preview.get('clan', preview_payload.get('clan', '')),
-        senda=preview.get('path', preview_payload.get('senda', '')),
-        disciplinas=preview.get('disciplinas', preview_payload.get('disciplinas') or []),
-        simbolos=preview.get('simbolos', preview_payload.get('simbolos') or []),
-        habilidad=preview.get('habilidad', preview_payload.get('habilidad', '')),
-        coste=preview.get('coste', preview_payload.get('coste', '')),
-        cripta=preview_payload.get('cripta', ''),
-        ilustrador=preview['illustrator'],
-        card_type=card_type,
-        layout_config=validated_layout,
+    preview_url = _prepare_render_source_from_path(
+        imagen_abspath,
+        target_name=preview['card_name'],
     )
-    if error:
-        return JsonResponse({'error': error}, status=400)
+    if not preview_url:
+        return JsonResponse({'error': 'Imagen de preview no encontrada'}, status=404)
 
-    return JsonResponse({'imagen_url': render_url})
+    return JsonResponse({'imagen_url': preview_url})
 
 
 @login_required
