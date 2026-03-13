@@ -281,7 +281,7 @@
     function frameFromSection(layerName, section, carta) {
         const cardWidth = Number(carta.width || 745);
         const cardHeight = Number(carta.height || 1040);
-        if (layerName === 'disciplinas' && state.cardType === 'cripta') {
+        if (layerName === 'disciplinas') {
             ensureSectionRules(layerName, section);
             const rawBox = section.box && typeof section.box === 'object' ? section.box : {};
             const spacing = Math.max(30, Math.round(Number(rawBox.height || section.spacing || 80)));
@@ -366,7 +366,7 @@
         const cardHeight = Number(carta.height || 1040);
         const normalizedFrame = normalizeFrameForLayer(layerName, frame);
         const profile = profileForLayer(layerName);
-        if (layerName === 'disciplinas' && state.cardType === 'cripta') {
+        if (layerName === 'disciplinas') {
             ensureSectionRules(layerName, section);
             const anchorY = Math.max(0, Math.round(normalizedFrame.y + normalizedFrame.height));
             section.x = Math.round(normalizedFrame.x);
@@ -439,7 +439,7 @@
         propX.value = frame.x;
         propWidth.value = frame.width;
         propHeight.value = frame.height;
-        if (layerName === 'disciplinas' && state.cardType === 'cripta') {
+        if (layerName === 'disciplinas') {
             propY.value = frame.y + frame.height;
             return;
         }
@@ -670,7 +670,7 @@
             width: Number(propWidth.value || 50),
             height: Number(propHeight.value || 50),
         };
-        if (state.selectedLayer === 'disciplinas' && state.cardType === 'cripta') {
+        if (state.selectedLayer === 'disciplinas') {
             frame = {
                 x: frame.x,
                 y: frame.y - frame.height,

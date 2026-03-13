@@ -273,16 +273,14 @@ class LayoutConfigBoxSchemaTests(TestCase):
         self.assertEqual(normalized['disciplinas']['box']['height'], normalized['disciplinas']['spacing'])
         self.assertEqual(normalized['disciplinas']['rules']['gap_from_habilidad'], 0)
 
-    def test_normalize_libreria_materializes_box_for_disciplinas(self):
+    def test_normalize_libreria_materializes_disciplina_anchor_box(self):
         normalized = normalize_layout_config('libreria', load_classic_seed('libreria'))
 
         self.assertEqual(normalized['disciplinas']['box']['x'], normalized['disciplinas']['x'])
-        self.assertEqual(
-            normalized['disciplinas']['box']['y'],
-            normalized['carta']['height'] - normalized['disciplinas']['bottom'] - normalized['disciplinas']['size'],
-        )
+        self.assertEqual(normalized['disciplinas']['box']['y'], normalized['disciplinas']['y'])
         self.assertEqual(normalized['disciplinas']['box']['width'], normalized['disciplinas']['size'])
-        self.assertEqual(normalized['disciplinas']['box']['height'], normalized['disciplinas']['spacing'] * 3)
+        self.assertEqual(normalized['disciplinas']['box']['height'], normalized['disciplinas']['spacing'])
+        self.assertEqual(normalized['disciplinas']['rules']['gap_from_habilidad'], 0)
 
     def test_normalize_libreria_materializes_box_for_simbolos(self):
         normalized = normalize_layout_config('libreria', load_classic_seed('libreria'))
@@ -321,6 +319,13 @@ class LayoutConfigValidationV2Tests(TestCase):
 
         with self.assertRaises(LayoutValidationError):
             validate_layout_config('cripta', config)
+
+    def test_validate_rejects_invalid_libreria_disciplinas_gap_from_habilidad(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['disciplinas']['rules']['gap_from_habilidad'] = -1
+
+        with self.assertRaises(LayoutValidationError):
+            validate_layout_config('libreria', config)
 
     def test_validate_libreria_rejects_invalid_disciplinas_box(self):
         config = normalize_layout_config('libreria', load_classic_seed('libreria'))
@@ -541,13 +546,14 @@ class LayoutEditorStaticAssetTests(SimpleTestCase):
         self.assertIn('prop-disciplinas-fixed', script)
         self.assertIn('fixed_bottom', script)
 
-    def test_editor_script_persists_cripta_disciplina_anchor_and_gap(self):
+    def test_editor_script_persists_disciplina_anchor_and_gap_for_all_card_types(self):
         script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')
 
         self.assertIn('section.rules.gap_from_habilidad', script)
         self.assertIn('normalizedFrame.y + normalizedFrame.height', script)
         self.assertIn('propY.value = frame.y + frame.height', script)
         self.assertIn('getHabilidadTop', script)
+        self.assertNotIn("layerName === 'disciplinas' && state.cardType === 'cripta'", script)
 
 
 class EndToEndLayoutFlowTests(TestCase):

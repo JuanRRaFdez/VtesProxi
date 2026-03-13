@@ -210,7 +210,7 @@ def _ensure_square_coste_section(normalized):
         section['left'] = box['x']
 
 
-def _ensure_cripta_disciplina_anchor_section(normalized):
+def _ensure_disciplina_anchor_section(normalized):
     section = normalized.get('disciplinas')
     if not isinstance(section, dict):
         return
@@ -301,11 +301,10 @@ def normalize_layout_config(card_type, config):
     _ensure_text_v2_section(normalized, 'nombre')
     _ensure_text_v2_section(normalized, 'ilustrador')
     _ensure_square_symbol_section(normalized, 'clan')
+    _ensure_disciplina_anchor_section(normalized)
     if normalized_card_type == 'cripta':
-        _ensure_cripta_disciplina_anchor_section(normalized)
         _ensure_square_symbol_section(normalized, 'senda')
     else:
-        _ensure_stack_box_section(normalized, 'disciplinas', bottom_anchored=True)
         _ensure_stack_box_section(normalized, 'simbolos')
     _ensure_square_coste_section(normalized)
     return normalized
@@ -421,12 +420,11 @@ def validate_layout_config(card_type, config):
         _validate_box('disciplinas', disciplinas)
     disc_rules = disciplinas.get('rules')
     _validate_stack_rules('disciplinas', disc_rules, {'free', 'fixed_bottom'})
-    if normalized_card_type == 'cripta':
-        gap_from_habilidad = (disc_rules or {}).get('gap_from_habilidad', 0)
-        if not _is_number(gap_from_habilidad):
-            raise LayoutValidationError('disciplinas.rules.gap_from_habilidad debe ser numérico')
-        if gap_from_habilidad < 0 or gap_from_habilidad > 3000:
-            raise LayoutValidationError('disciplinas.rules.gap_from_habilidad fuera de rango')
+    gap_from_habilidad = (disc_rules or {}).get('gap_from_habilidad', 0)
+    if not _is_number(gap_from_habilidad):
+        raise LayoutValidationError('disciplinas.rules.gap_from_habilidad debe ser numérico')
+    if gap_from_habilidad < 0 or gap_from_habilidad > 3000:
+        raise LayoutValidationError('disciplinas.rules.gap_from_habilidad fuera de rango')
 
     habilidad = normalized['habilidad']
     _expect_number(habilidad, 'font_size', 8, 200)

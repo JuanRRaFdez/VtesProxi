@@ -685,6 +685,107 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
 
         self.assertEqual(metrics['disciplinas']['box']['y'], 620)
 
+    def test_libreria_disciplinas_vertical_anchor_uses_habilidad_gap_when_free(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['box'] = {
+            'x': 170,
+            'y': 720,
+            'width': 420,
+            'height': 180,
+        }
+        config['disciplinas']['box'] = {
+            'x': 30,
+            'y': 10,
+            'width': 64,
+            'height': 180,
+        }
+        config['disciplinas']['rules'] = {'anchor_mode': 'free', 'gap_from_habilidad': 0}
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            'Texto corto',
+            disciplinas=[{'name': 'dom', 'level': 'inf'}, {'name': 'nec', 'level': 'inf'}, {'name': 'tha', 'level': 'inf'}],
+        )
+
+        self.assertEqual(metrics['disciplinas']['box']['x'], 30)
+        self.assertEqual(metrics['disciplinas']['box']['width'], 64)
+        self.assertEqual(metrics['disciplinas']['box']['y'], metrics['habilidad']['used_box']['y'])
+
+    def test_libreria_disciplinas_free_mode_uses_fixed_gap_from_habilidad(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['box'] = {'x': 170, 'y': 720, 'width': 420, 'height': 180}
+        config['disciplinas']['box'] = {'x': 18, 'y': 90, 'width': 72, 'height': 82}
+        config['disciplinas']['rules'] = {'anchor_mode': 'free', 'gap_from_habilidad': 24}
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            'Texto corto',
+            disciplinas=[{'name': 'dom', 'level': 'inf'}, {'name': 'nec', 'level': 'inf'}, {'name': 'tha', 'level': 'inf'}],
+        )
+
+        self.assertEqual(metrics['disciplinas']['box']['y'], metrics['habilidad']['used_box']['y'] - 24)
+
+    def test_libreria_disciplinas_size_depends_on_box_width_and_spacing_on_box_height(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['disciplinas']['box'] = {
+            'x': 18,
+            'y': 90,
+            'width': 72,
+            'height': 210,
+        }
+
+        metrics_two = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            'Texto corto',
+            disciplinas=[{'name': 'dom', 'level': 'inf'}, {'name': 'nec', 'level': 'inf'}],
+        )
+        metrics_six = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            'Texto corto',
+            disciplinas=[
+                {'name': 'dom', 'level': 'inf'},
+                {'name': 'nec', 'level': 'inf'},
+                {'name': 'tha', 'level': 'inf'},
+                {'name': 'aus', 'level': 'inf'},
+                {'name': 'cel', 'level': 'inf'},
+                {'name': 'obf', 'level': 'inf'},
+            ],
+        )
+
+        self.assertEqual(metrics_two['disciplinas']['size'], 72)
+        self.assertEqual(metrics_two['disciplinas']['spacing'], 210)
+        self.assertEqual(metrics_six['disciplinas']['size'], 72)
+        self.assertEqual(metrics_six['disciplinas']['spacing'], 210)
+
+    def test_libreria_disciplinas_fixed_bottom_preserves_configured_bottom_edge(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['box'] = {
+            'x': 170,
+            'y': 720,
+            'width': 420,
+            'height': 180,
+        }
+        config['disciplinas']['box'] = {
+            'x': 24,
+            'y': 620,
+            'width': 70,
+            'height': 82,
+        }
+        config['disciplinas']['rules'] = {'anchor_mode': 'fixed_bottom', 'gap_from_habilidad': 0}
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            'Texto corto',
+            disciplinas=[{'name': 'dom', 'level': 'inf'}, {'name': 'nec', 'level': 'inf'}, {'name': 'tha', 'level': 'inf'}],
+        )
+
+        self.assertEqual(metrics['disciplinas']['box']['y'], 620)
+
     def test_cripta_explicit_box_starts_stack_from_bottom_anchor(self):
         positions = srv_textos_views._compute_vertical_stack_positions(
             box={'x': 10, 'y': 190, 'width': 90, 'height': 90},
