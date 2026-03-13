@@ -385,14 +385,14 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
     ln = layout_scope.get('nombre') or lay.get('nombre') or {}
     lil = layout_scope.get('ilustrador') or lay.get('ilustrador') or {}
     ld = layout_scope.get('disciplinas') or lay.get('disciplinas') or {}
-    lsi = layout_scope.get('simbolos') if normalized_card_type == 'libreria' else None
+    lsi = (layout_scope.get('simbolos') or lay.get('simbolos')) if normalized_card_type == 'libreria' else None
     lh = layout_scope.get('habilidad') or lay.get('habilidad') or {}
     lco = layout_scope.get('coste') or lay.get('coste') or {}
     lcr = lay.get('cripta') or {}
 
     raw_lil = raw_layout_scope.get('ilustrador') or raw_lay.get('ilustrador') or {}
     raw_ld = raw_layout_scope.get('disciplinas') or raw_lay.get('disciplinas') or {}
-    raw_lsi = raw_layout_scope.get('simbolos') if normalized_card_type == 'libreria' else None
+    raw_lsi = (raw_layout_scope.get('simbolos') or raw_lay.get('simbolos')) if normalized_card_type == 'libreria' else None
     raw_lh = raw_layout_scope.get('habilidad') or raw_lay.get('habilidad') or {}
     raw_lcr = raw_lay.get('cripta') or {}
 
@@ -1268,7 +1268,7 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     lcl = layout_scope.get('clan') or lay.get('clan')
     ls  = layout_scope.get('senda')
     ld  = layout_scope.get('disciplinas') or lay.get('disciplinas')
-    lsi = layout_scope.get('simbolos') if card_type == 'libreria' else None
+    lsi = (layout_scope.get('simbolos') or lay.get('simbolos')) if card_type == 'libreria' else None
     lh  = layout_scope.get('habilidad') or lay.get('habilidad')
     lco = layout_scope.get('coste') or lay.get('coste')
     lcr = lay.get('cripta') if card_type == 'cripta' else None

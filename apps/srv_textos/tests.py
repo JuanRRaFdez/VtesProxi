@@ -444,6 +444,19 @@ class SymbolsDiscBoxSizingTests(SimpleTestCase):
 
         self.assertLessEqual(metrics['size'], 100)
 
+    def test_libreria_metrics_keep_root_level_simbolos_section(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            card_type='libreria',
+            simbolos=['action', 'equipment'],
+        )
+
+        self.assertIn('simbolos', metrics)
+        self.assertEqual(metrics['simbolos']['box']['x'], config['simbolos']['box']['x'])
+        self.assertEqual(metrics['simbolos']['box']['y'], config['simbolos']['box']['y'])
+
 
 class HabilidadDynamicHeightTests(SimpleTestCase):
     def test_cripta_dynamic_habilidad_uses_effective_render_font_size(self):
@@ -945,3 +958,28 @@ class ClassicStyleRenderTests(TestCase):
         self.assertEqual(mock_text.call_count, 1)
         self.assertEqual(mock_text.call_args.kwargs['fill'], 'white')
         self.assertEqual(mock_text.call_args.kwargs['font'].size, 24)
+
+    def test_render_libreria_composites_selected_symbols(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        image_path = self._make_temp_image_path()
+
+        with patch('apps.srv_textos.views._load_symbol', return_value=Image.new('RGBA', (32, 32), (255, 0, 0, 255))):
+            with patch('PIL.Image.Image.alpha_composite') as mock_alpha:
+                render_url, error = srv_textos_views._render_carta_from_path(
+                    image_path,
+                    nombre='',
+                    clan='',
+                    senda='',
+                    disciplinas=[],
+                    simbolos=['action', 'equipment'],
+                    habilidad='',
+                    coste='',
+                    cripta='',
+                    ilustrador='',
+                    card_type='libreria',
+                    layout_config=config,
+                )
+
+        self.assertIsNone(error)
+        self.assertTrue(render_url.startswith('/media/render/'))
+        self.assertGreaterEqual(mock_alpha.call_count, 2)
