@@ -1,3 +1,32 @@
-from django.test import TestCase
+from pathlib import Path
 
-# Create your tests here.
+from django.conf import settings
+from django.test import SimpleTestCase
+
+
+class ImportarImagenTemplateTests(SimpleTestCase):
+    def test_render_clan_does_not_skip_empty_selection(self):
+        template = Path(
+            settings.BASE_DIR,
+            'apps',
+            'cripta',
+            'templates',
+            'cripta',
+            'importar_imagen.html',
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('function renderClan()', template)
+        self.assertNotIn("if (!clan) {\n                return;\n            }", template)
+
+    def test_render_senda_does_not_skip_empty_selection(self):
+        template = Path(
+            settings.BASE_DIR,
+            'apps',
+            'cripta',
+            'templates',
+            'cripta',
+            'importar_imagen.html',
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('function renderSenda()', template)
+        self.assertNotIn("if (!senda) {\n                return;\n            }", template)

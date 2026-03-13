@@ -737,9 +737,6 @@
             const imagenUrl = originalRecorteUrl;
             const valor = nombreInput.value.trim();
             const senda = getSendaValue();
-            if (!clan) {
-                return;
-            }
             if (!imagenUrl || imagenUrl.includes('undefined') || imagenUrl === '') {
                 return;
             }
@@ -804,9 +801,6 @@
             const imagenUrl = originalRecorteUrl;
             const valor = nombreInput.value.trim();
             const clan = clanSelect.value;
-            if (!senda) {
-                return;
-            }
             if (!imagenUrl || imagenUrl.includes('undefined') || imagenUrl === '') {
                 return;
             }
