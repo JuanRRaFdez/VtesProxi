@@ -210,6 +210,41 @@ def _ensure_square_coste_section(normalized):
         section['left'] = box['x']
 
 
+def _ensure_stack_box_section(normalized, section_name, *, bottom_anchored=False):
+    section = normalized.get(section_name)
+    if not isinstance(section, dict):
+        return
+
+    carta = normalized.get('carta') or {}
+    card_height = int(carta.get('height', 1040) or 1040)
+    size = max(1, int(section.get('size', 64) or 64))
+    spacing = max(1, int(section.get('spacing', 80) or 80))
+    default_y = int(section.get('y', 0) or 0)
+    if bottom_anchored:
+        default_y = max(0, card_height - int(section.get('bottom', 0) or 0) - size)
+
+    default_box = {
+        'x': int(section.get('x', 0) or 0),
+        'y': default_y,
+        'width': size,
+        'height': max(60, spacing * 3),
+    }
+    raw_box = section.get('box') if isinstance(section.get('box'), dict) else default_box
+    box = {
+        'x': int(raw_box.get('x', default_box['x'])),
+        'y': int(raw_box.get('y', default_box['y'])),
+        'width': int(raw_box.get('width', default_box['width'])),
+        'height': int(raw_box.get('height', default_box['height'])),
+    }
+    section['box'] = box
+    section['x'] = box['x']
+    section['y'] = box['y']
+    section['size'] = max(1, box['width'])
+    section['spacing'] = max(1, int(box['height'] / 3))
+    if bottom_anchored:
+        section['bottom'] = max(0, card_height - box['y'] - box['width'])
+
+
 def normalize_layout_config(card_type, config):
     if not isinstance(config, dict):
         raise LayoutValidationError('config debe ser un objeto JSON')
@@ -224,6 +259,9 @@ def normalize_layout_config(card_type, config):
     _ensure_square_symbol_section(normalized, 'clan')
     if normalized_card_type == 'cripta':
         _ensure_square_symbol_section(normalized, 'senda')
+    else:
+        _ensure_stack_box_section(normalized, 'disciplinas', bottom_anchored=True)
+        _ensure_stack_box_section(normalized, 'simbolos')
     _ensure_square_coste_section(normalized)
     return normalized
 
@@ -334,6 +372,7 @@ def validate_layout_config(card_type, config):
     _expect_number(disciplinas, 'x', 0, 3000)
     _expect_number(disciplinas, 'bottom', 0, 3000)
     _expect_number(disciplinas, 'spacing', 0, 1000)
+    _validate_box('disciplinas', disciplinas)
     _validate_stack_rules('disciplinas', disciplinas.get('rules'), {'free', 'fixed_bottom'})
 
     habilidad = normalized['habilidad']
@@ -346,6 +385,8 @@ def validate_layout_config(card_type, config):
     _expect_number(habilidad, 'line_spacing', 0, 60)
     _expect_number(habilidad, 'bg_padding', 0, 300)
     _expect_number(habilidad, 'bg_radius', 0, 300)
+    if isinstance(habilidad.get('box'), dict):
+        _validate_box('habilidad', habilidad)
     _validate_habilidad_box(habilidad)
 
     coste = normalized['coste']
@@ -381,6 +422,7 @@ def validate_layout_config(card_type, config):
         _expect_number(simbolos, 'x', 0, 3000)
         _expect_number(simbolos, 'y', 0, 3000)
         _expect_number(simbolos, 'spacing', 0, 1000)
+        _validate_box('simbolos', simbolos)
         _validate_stack_rules('simbolos', simbolos.get('rules'), {'free'})
 
     return normalized

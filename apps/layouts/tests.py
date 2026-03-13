@@ -230,6 +230,25 @@ class LayoutConfigBoxSchemaTests(TestCase):
         self.assertEqual(normalized['nombre']['rules']['align'], 'center')
         self.assertEqual(normalized['ilustrador']['rules']['align'], 'left')
 
+    def test_normalize_libreria_materializes_box_for_disciplinas(self):
+        normalized = normalize_layout_config('libreria', load_classic_seed('libreria'))
+
+        self.assertEqual(normalized['disciplinas']['box']['x'], normalized['disciplinas']['x'])
+        self.assertEqual(
+            normalized['disciplinas']['box']['y'],
+            normalized['carta']['height'] - normalized['disciplinas']['bottom'] - normalized['disciplinas']['size'],
+        )
+        self.assertEqual(normalized['disciplinas']['box']['width'], normalized['disciplinas']['size'])
+        self.assertEqual(normalized['disciplinas']['box']['height'], normalized['disciplinas']['spacing'] * 3)
+
+    def test_normalize_libreria_materializes_box_for_simbolos(self):
+        normalized = normalize_layout_config('libreria', load_classic_seed('libreria'))
+
+        self.assertEqual(normalized['simbolos']['box']['x'], normalized['simbolos']['x'])
+        self.assertEqual(normalized['simbolos']['box']['y'], normalized['simbolos']['y'])
+        self.assertEqual(normalized['simbolos']['box']['width'], normalized['simbolos']['size'])
+        self.assertEqual(normalized['simbolos']['box']['height'], normalized['simbolos']['spacing'] * 3)
+
 
 class LayoutConfigValidationV2Tests(TestCase):
     def test_validate_rejects_invalid_align(self):
@@ -252,6 +271,27 @@ class LayoutConfigValidationV2Tests(TestCase):
 
         with self.assertRaises(LayoutValidationError):
             validate_layout_config('cripta', config)
+
+    def test_validate_libreria_rejects_invalid_disciplinas_box(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['disciplinas']['box']['x'] = -1
+
+        with self.assertRaises(LayoutValidationError):
+            validate_layout_config('libreria', config)
+
+    def test_validate_libreria_rejects_invalid_simbolos_box(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['simbolos']['box']['x'] = -1
+
+        with self.assertRaises(LayoutValidationError):
+            validate_layout_config('libreria', config)
+
+    def test_validate_rejects_invalid_habilidad_box(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['box'] = {'x': 170, 'y': 600, 'width': -1, 'height': 180}
+
+        with self.assertRaises(LayoutValidationError):
+            validate_layout_config('libreria', config)
 
 
 class LayoutManagementApiTests(TestCase):
