@@ -108,6 +108,41 @@ class LayoutApiListCreateTests(TestCase):
         self.assertEqual(created.config['carta']['width'], 745)
         self.assertEqual(created.config['carta']['height'], 1040)
 
+    def test_create_builds_libreria_layout_with_normalized_stack_boxes(self):
+        self.client.force_login(self.user)
+        response = self.client.post('/layouts/api/create', {
+            'name': 'Mi libreria',
+            'card_type': 'libreria',
+        })
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()['layout']['config']
+        self.assertIn('box', payload['disciplinas'])
+        self.assertIn('box', payload['simbolos'])
+
+        created = UserLayout.objects.get(user=self.user, name='Mi libreria', card_type='libreria')
+        self.assertIn('box', created.config['disciplinas'])
+        self.assertIn('box', created.config['simbolos'])
+
+    def test_list_normalizes_legacy_libreria_config_for_editor(self):
+        own_layout = UserLayout.objects.create(
+            user=self.user,
+            name='Libreria legacy',
+            card_type='libreria',
+            config=load_classic_seed('libreria'),
+            is_default=False,
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get('/layouts/api/list', {'card_type': 'libreria'})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()['layouts']
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]['id'], own_layout.id)
+        self.assertIn('box', payload[0]['config']['disciplinas'])
+        self.assertIn('box', payload[0]['config']['simbolos'])
+
     def test_detail_rejects_other_user_layout(self):
         other_layout = UserLayout.objects.create(
             user=self.other_user,

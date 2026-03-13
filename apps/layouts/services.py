@@ -372,7 +372,8 @@ def validate_layout_config(card_type, config):
     _expect_number(disciplinas, 'x', 0, 3000)
     _expect_number(disciplinas, 'bottom', 0, 3000)
     _expect_number(disciplinas, 'spacing', 0, 1000)
-    _validate_box('disciplinas', disciplinas)
+    if isinstance(disciplinas.get('box'), dict):
+        _validate_box('disciplinas', disciplinas)
     _validate_stack_rules('disciplinas', disciplinas.get('rules'), {'free', 'fixed_bottom'})
 
     habilidad = normalized['habilidad']

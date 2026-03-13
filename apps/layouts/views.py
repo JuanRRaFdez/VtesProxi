@@ -8,7 +8,12 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 
 from apps.layouts.models import UserLayout
-from apps.layouts.services import LayoutValidationError, load_classic_seed, validate_layout_config
+from apps.layouts.services import (
+    LayoutValidationError,
+    load_classic_seed,
+    normalize_layout_config,
+    validate_layout_config,
+)
 from apps.srv_textos.views import _prepare_render_source_from_path
 
 
@@ -64,7 +69,7 @@ def _serialize_layout(layout):
         'id': layout.id,
         'name': layout.name,
         'card_type': layout.card_type,
-        'config': layout.config,
+        'config': normalize_layout_config(layout.card_type, layout.config),
         'is_default': layout.is_default,
     }
 
@@ -113,7 +118,7 @@ def api_create(request):
             user=request.user,
             name=name,
             card_type=card_type,
-            config=load_classic_seed(card_type),
+            config=validate_layout_config(card_type, load_classic_seed(card_type)),
             is_default=False,
         )
     except IntegrityError:
