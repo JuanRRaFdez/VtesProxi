@@ -856,13 +856,14 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             820,
         )
 
-    def test_libreria_habilidad_without_bottom_anchor_margin_flag_keeps_legacy_box_semantics(self):
+    def test_libreria_habilidad_legacy_semantics_alias_grows_up_from_bottom(self):
         config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['rules']['box_semantics'] = 'legacy'
         config['habilidad']['box'] = {
             'x': 170,
-            'y': 720,
+            'y': 820,
             'width': 420,
-            'height': 180,
+            'height': 24,
         }
 
         metrics = srv_textos_views._compute_layout_metrics(
@@ -871,8 +872,33 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             'texto ' * 60,
         )
 
-        self.assertEqual(metrics['habilidad']['used_box']['y'], 720)
-        self.assertEqual(metrics['habilidad']['used_box']['height'], 180)
+        self.assertEqual(
+            metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
+            820,
+        )
+        self.assertLess(metrics['habilidad']['used_box']['y'], 820)
+
+    def test_libreria_habilidad_missing_box_semantics_defaults_to_bottom_anchor_margin(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        del config['habilidad']['rules']['box_semantics']
+        config['habilidad']['box'] = {
+            'x': 170,
+            'y': 820,
+            'width': 420,
+            'height': 24,
+        }
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            'texto ' * 60,
+        )
+
+        self.assertEqual(
+            metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
+            820,
+        )
+        self.assertLess(metrics['habilidad']['used_box']['y'], 820)
 
     def test_disciplinas_vertical_anchor_uses_habilidad_gap_when_free(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))

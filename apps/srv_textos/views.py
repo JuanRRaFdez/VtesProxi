@@ -457,10 +457,11 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         and normalized_card_type == 'cripta'
         and has_habilidad_box
     )
+    libreria_box_semantics = hab_rules.get('box_semantics', 'bottom_anchor_margin')
     is_libreria_bottom_anchor_margin = (
         normalized_card_type == 'libreria'
         and has_habilidad_box
-        and hab_rules.get('box_semantics') == 'bottom_anchor_margin'
+        and libreria_box_semantics in {'legacy', 'bottom_anchor_margin'}
     )
     effective_hab_font_size = layout_hab_font_size
     if (is_dynamic_bottom_anchor or is_libreria_bottom_anchor_margin) and hab_font_size is not None:

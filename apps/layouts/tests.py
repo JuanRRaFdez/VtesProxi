@@ -577,6 +577,7 @@ class LayoutEditorStaticAssetTests(SimpleTestCase):
 
         self.assertIn('box_semantics', script)
         self.assertIn('bottom_anchor_margin', script)
+        self.assertIn("boxSemantics === 'legacy'", script)
         self.assertIn("state.cardType === 'libreria'", script)
         self.assertIn("layerName === 'habilidad'", script)
 

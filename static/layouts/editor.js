@@ -212,10 +212,22 @@
             && typeof section === 'object';
     }
 
+    function getLibreriaHabilidadBoxSemantics(section) {
+        if (!usesLibreriaHabilidadBottomAnchorEditor('habilidad', section)) {
+            return null;
+        }
+        const boxSemantics = section.rules && section.rules.box_semantics
+            ? section.rules.box_semantics
+            : 'bottom_anchor_margin';
+        if (boxSemantics === 'legacy') {
+            return 'bottom_anchor_margin';
+        }
+        return boxSemantics;
+    }
+
     function isLibreriaBottomAnchorMargin(layerName, section) {
         return usesLibreriaHabilidadBottomAnchorEditor(layerName, section)
-            && section.rules
-            && section.rules.box_semantics === 'bottom_anchor_margin';
+            && getLibreriaHabilidadBoxSemantics(section) === 'bottom_anchor_margin';
     }
 
     function getHabilidadPreviewContentHeight(section) {
@@ -236,7 +248,7 @@
         );
         const anchorX = Math.max(0, Math.round(Number(rawBox.x != null ? rawBox.x : (section.x || 0))));
         const previewContentHeight = getHabilidadPreviewContentHeight(section);
-        const semantics = isLibreriaBottomAnchorMargin('habilidad', section) ? 'bottom_anchor_margin' : 'legacy';
+        const semantics = getLibreriaHabilidadBoxSemantics(section) || 'bottom_anchor_margin';
         let anchorY = Math.max(
             0,
             Math.round(Number(
