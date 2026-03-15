@@ -856,49 +856,89 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             820,
         )
 
-    def test_libreria_habilidad_legacy_semantics_preserves_legacy_visual_bottom_edge(self):
+    def test_libreria_habilidad_legacy_semantics_is_responsive_from_legacy_bottom_edge(self):
         config = normalize_layout_config('libreria', load_classic_seed('libreria'))
         config['habilidad']['rules']['box_semantics'] = 'legacy'
         config['habilidad']['box'] = {
-            'x': 170,
-            'y': 820,
-            'width': 420,
-            'height': 24,
+            'x': 54,
+            'y': 678,
+            'width': 639,
+            'height': 290,
         }
 
-        metrics = srv_textos_views._compute_layout_metrics(
+        short_metrics = srv_textos_views._compute_layout_metrics(
             config,
             'libreria',
-            'texto ' * 60,
+            'Texto corto',
+            hab_font_size=24,
         )
+        long_metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            'texto ' * 80,
+            hab_font_size=24,
+        )
+
+        legacy_bottom_edge = 968
 
         self.assertEqual(
-            metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
-            844,
+            short_metrics['habilidad']['used_box']['y'] + short_metrics['habilidad']['used_box']['height'],
+            legacy_bottom_edge,
         )
-        self.assertLess(metrics['habilidad']['used_box']['y'], 844)
+        self.assertEqual(
+            long_metrics['habilidad']['used_box']['y'] + long_metrics['habilidad']['used_box']['height'],
+            legacy_bottom_edge,
+        )
+        self.assertGreater(
+            long_metrics['habilidad']['used_box']['height'],
+            short_metrics['habilidad']['used_box']['height'],
+        )
+        self.assertLess(
+            short_metrics['habilidad']['used_box']['height'],
+            config['habilidad']['box']['height'],
+        )
 
-    def test_libreria_habilidad_missing_box_semantics_preserves_legacy_visual_bottom_edge(self):
+    def test_libreria_habilidad_missing_box_semantics_is_responsive_from_legacy_bottom_edge(self):
         config = normalize_layout_config('libreria', load_classic_seed('libreria'))
         del config['habilidad']['rules']['box_semantics']
         config['habilidad']['box'] = {
-            'x': 170,
-            'y': 820,
-            'width': 420,
-            'height': 24,
+            'x': 54,
+            'y': 678,
+            'width': 639,
+            'height': 290,
         }
 
-        metrics = srv_textos_views._compute_layout_metrics(
+        short_metrics = srv_textos_views._compute_layout_metrics(
             config,
             'libreria',
-            'texto ' * 60,
+            'Texto corto',
+            hab_font_size=24,
+        )
+        long_metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            'texto ' * 80,
+            hab_font_size=24,
         )
 
+        legacy_bottom_edge = 968
+
         self.assertEqual(
-            metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
-            844,
+            short_metrics['habilidad']['used_box']['y'] + short_metrics['habilidad']['used_box']['height'],
+            legacy_bottom_edge,
         )
-        self.assertLess(metrics['habilidad']['used_box']['y'], 844)
+        self.assertEqual(
+            long_metrics['habilidad']['used_box']['y'] + long_metrics['habilidad']['used_box']['height'],
+            legacy_bottom_edge,
+        )
+        self.assertGreater(
+            long_metrics['habilidad']['used_box']['height'],
+            short_metrics['habilidad']['used_box']['height'],
+        )
+        self.assertLess(
+            short_metrics['habilidad']['used_box']['height'],
+            config['habilidad']['box']['height'],
+        )
 
     def test_libreria_disciplinas_follow_migrated_legacy_habilidad_box(self):
         config = normalize_layout_config('libreria', load_classic_seed('libreria'))

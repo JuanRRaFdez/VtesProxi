@@ -488,8 +488,9 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         used_hab_box_h = max(1, hab_box_bottom - used_hab_box_y)
     elif is_libreria_legacy_visual_box:
         hab_box_bottom = habilidad_box['y'] + habilidad_box['height']
-        legacy_visual_height = max(1, int(habilidad_box['height']))
-        vertical_margin = max(0, (legacy_visual_height - dynamic_hab_content_h) // 2)
+        # Legacy libreria boxes stored the full visual height. Preserve only the
+        # inherited bottom edge and let the actual height respond to content.
+        vertical_margin = max(0, int(hab_vertical_padding))
         outer_hab_box_h = max(1, dynamic_hab_content_h + (vertical_margin * 2))
         used_hab_box_y = max(0, hab_box_bottom - outer_hab_box_h)
         used_hab_box_h = max(1, hab_box_bottom - used_hab_box_y)
