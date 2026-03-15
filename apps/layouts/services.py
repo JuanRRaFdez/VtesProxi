@@ -300,7 +300,7 @@ def _ensure_habilidad_rules(normalized, card_type):
         section['rules'] = rules
 
     if card_type == 'libreria':
-        rules.setdefault('box_semantics', 'legacy')
+        rules.setdefault('box_semantics', 'bottom_anchor_margin')
 
 
 def normalize_layout_config(card_type, config):

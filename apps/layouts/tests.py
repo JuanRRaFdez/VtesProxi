@@ -290,10 +290,10 @@ class LayoutConfigBoxSchemaTests(TestCase):
         self.assertEqual(normalized['simbolos']['box']['width'], normalized['simbolos']['size'])
         self.assertEqual(normalized['simbolos']['box']['height'], normalized['simbolos']['spacing'] * 3)
 
-    def test_normalize_libreria_habilidad_defaults_to_legacy_box_semantics(self):
+    def test_normalize_libreria_habilidad_defaults_to_bottom_anchor_margin_box_semantics(self):
         normalized = normalize_layout_config('libreria', load_classic_seed('libreria'))
 
-        self.assertEqual(normalized['habilidad']['rules']['box_semantics'], 'legacy')
+        self.assertEqual(normalized['habilidad']['rules']['box_semantics'], 'bottom_anchor_margin')
 
     def test_normalize_libreria_preserves_bottom_anchor_margin_box_semantics(self):
         config = load_classic_seed('libreria')
@@ -367,6 +367,12 @@ class LayoutConfigValidationV2Tests(TestCase):
 
         with self.assertRaises(LayoutValidationError):
             validate_layout_config('libreria', config)
+
+    def test_validate_accepts_libreria_habilidad_legacy_box_semantics(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['rules']['box_semantics'] = 'legacy'
+
+        validate_layout_config('libreria', config)
 
 
 class LayoutManagementApiTests(TestCase):
