@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from PIL import Image
 
 from apps.layouts.models import UserLayout
@@ -277,6 +277,34 @@ class TextInBoxHelpersTests(SimpleTestCase):
 
 
 class HabilidadRenderAlignmentTests(SimpleTestCase):
+    @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+    def test_render_habilidad_libreria_uses_same_common_renderer_path_as_cripta(self):
+        image_path = os.path.join(settings.MEDIA_ROOT, 'recortes', 'test.png')
+        os.makedirs(os.path.dirname(image_path), exist_ok=True)
+        Image.new('RGBA', (745, 1040), (0, 0, 0, 0)).save(image_path)
+        common_calls = []
+
+        def fake_common_renderer(*args, **kwargs):
+            common_calls.append((args, kwargs))
+
+        with patch('apps.srv_textos.views._render_habilidad_text', side_effect=fake_common_renderer), patch(
+            'apps.srv_textos.views._render_habilidad_text_libreria'
+        ) as mock_libreria_renderer:
+            srv_textos_views._render_carta(
+                imagen_url='/media/recortes/test.png',
+                habilidad='Texto de prueba',
+                card_type='libreria',
+                layout_config=normalize_layout_config('libreria', load_classic_seed('libreria')),
+            )
+
+        self.assertEqual(len(common_calls), 1)
+        mock_libreria_renderer.assert_not_called()
+
+    def test_parse_habilidad_does_not_treat_double_asterisks_as_special_markup(self):
+        segments = srv_textos_views._parse_habilidad('**Accion** de prueba')
+
+        self.assertEqual(segments, [{'text': '**Accion** de prueba', 'style': 'bold'}])
+
     def test_discipline_ref_to_code_supports_inline_code_case_semantics(self):
         self.assertEqual(srv_textos_views._discipline_ref_to_code('dom'), ('dom', False))
         self.assertEqual(srv_textos_views._discipline_ref_to_code('DOM'), ('dom', True))
@@ -335,7 +363,7 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
         fake_symbol = Image.new('RGBA', (24, 24), (255, 255, 255, 255))
 
         with patch('apps.srv_textos.views._load_symbol', return_value=fake_symbol) as mock_load_symbol:
-            srv_textos_views._render_habilidad_text_libreria(
+            srv_textos_views._render_habilidad_text(
                 image=image,
                 text='**Accion** [dom] y [DOM]',
                 x=90,
@@ -381,7 +409,7 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
     def test_render_habilidad_libreria_uses_box_origin_as_outer_top_left(self):
         image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
 
-        srv_textos_views._render_habilidad_text_libreria(
+        srv_textos_views._render_habilidad_text(
             image=image,
             text='**Accion** de prueba',
             x=90,
@@ -429,7 +457,7 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
     def test_render_habilidad_libreria_centers_text_vertically_inside_box(self):
         image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
 
-        srv_textos_views._render_habilidad_text_libreria(
+        srv_textos_views._render_habilidad_text(
             image=image,
             text='**Accion** de prueba',
             x=90,

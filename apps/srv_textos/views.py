@@ -1488,20 +1488,12 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     # 7) Habilidad (cuadro de texto con formato mixto)
     if habilidad:
         try:
-            if card_type == 'libreria':
-                _render_habilidad_text_libreria(
-                    image, habilidad, hab_x, hab_y, hab_max_w, hab_font_size, lh['color'],
-                    bg_opacity=hab_opacity, bg_padding=hab_padding,
-                    bg_radius=hab_radius, line_spacing=hab_line_sp,
-                    bg_color=tuple(lh['bg_color']), box_height=hab_box_h
-                )
-            else:
-                _render_habilidad_text(
-                    image, habilidad, hab_x, hab_y, hab_max_w, hab_font_size, lh['color'],
-                    bg_opacity=hab_opacity, bg_padding=hab_padding,
-                    bg_radius=hab_radius, line_spacing=hab_line_sp,
-                    bg_color=tuple(lh['bg_color']), box_height=hab_box_h
-                )
+            _render_habilidad_text(
+                image, habilidad, hab_x, hab_y, hab_max_w, hab_font_size, lh['color'],
+                bg_opacity=hab_opacity, bg_padding=hab_padding,
+                bg_radius=hab_radius, line_spacing=hab_line_sp,
+                bg_color=tuple(lh['bg_color']), box_height=hab_box_h
+            )
         except Exception as e:
             print(f'Error renderizando habilidad: {e}')
 
