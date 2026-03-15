@@ -54,8 +54,29 @@
     #modalPanel {
         position: relative;
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         gap: 0.7rem;
+    }
+    .modal-nav-btn {
+        width: 52px;
+        height: 52px;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.92);
+        color: #111;
+        font-size: 1.6rem;
+        line-height: 1;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.28);
+    }
+    .modal-nav-btn:hover {
+        background: #fff;
+    }
+    .modal-nav-btn[hidden] {
+        display: none !important;
     }
     #modalActions {
         position: static;
@@ -165,7 +186,12 @@
 <div class="cartas-grid">
     {% for carta in cartas %}
     <div class="carta-card">
-        <div class="carta-img-wrap" onclick="openModal('{{ carta.url }}', '{{ carta.nombre|escapejs }}')">
+        <div
+            class="carta-img-wrap"
+            data-card-index="{{ forloop.counter0 }}"
+            data-card-url="{{ carta.url }}"
+            data-card-filename="{{ carta.nombre }}"
+        >
             <img src="{{ carta.url }}" alt="Carta" loading="lazy">
         </div>
         <div class="carta-footer">
@@ -217,6 +243,7 @@
 <div id="modalOverlay" onclick="closeModal()">
     <span id="modalClose" onclick="closeModal()">&times;</span>
     <div id="modalPanel" onclick="event.stopPropagation()">
+        <button type="button" id="modalPrevBtn" class="modal-nav-btn" title="Anterior" hidden>&lsaquo;</button>
         <div id="modalActions">
             <a id="modalDownloadBtn" class="modal-icon-btn" href="#" title="Descargar">
                 <img src="{% static 'images/descarga.png' %}" alt="Descargar">
@@ -231,6 +258,7 @@
             </form>
         </div>
         <img id="modalImg" src="" alt="">
+        <button type="button" id="modalNextBtn" class="modal-nav-btn" title="Siguiente" hidden>&rsaquo;</button>
     </div>
 </div>
 
@@ -238,6 +266,13 @@
 const downloadUrlPattern = "{% url 'mis_cartas:descargar_carta' '__FILENAME__' %}";
 const deleteUrlPattern = "{% url 'mis_cartas:borrar_carta' '__FILENAME__' %}";
 const pdfGenerateUrl = "{% url 'mis_cartas:generar_pdf_cartas' %}";
+const visibleCards = Array.from(document.querySelectorAll('.carta-img-wrap[data-card-url]')).map(function (element) {
+    return {
+        url: element.dataset.cardUrl,
+        filename: element.dataset.cardFilename,
+    };
+});
+let activeCardIndex = -1;
 
 document.getElementById('generatePdfBtn')?.addEventListener('click', async function () {
     const selected = Array.from(
@@ -274,21 +309,85 @@ document.getElementById('generatePdfBtn')?.addEventListener('click', async funct
     URL.revokeObjectURL(url);
 });
 
-function openModal(url, filename) {
-    document.getElementById('modalImg').src = url;
-    const safeName = encodeURIComponent(filename || '');
+function updateCarouselControls() {
+    const shouldShow = visibleCards.length > 1;
+    document.getElementById('modalPrevBtn').hidden = !shouldShow;
+    document.getElementById('modalNextBtn').hidden = !shouldShow;
+}
+
+function renderActiveCard() {
+    if (activeCardIndex < 0 || activeCardIndex >= visibleCards.length) {
+        closeModal();
+        return;
+    }
+    const currentCard = visibleCards[activeCardIndex];
+    const safeName = encodeURIComponent(currentCard.filename || '');
+    document.getElementById('modalImg').src = currentCard.url;
+    document.getElementById('modalImg').alt = currentCard.filename || 'Carta';
     document.getElementById('modalDownloadBtn').href = downloadUrlPattern.replace('__FILENAME__', safeName);
     document.getElementById('modalDeleteForm').action = deleteUrlPattern.replace('__FILENAME__', safeName);
+    updateCarouselControls();
+}
+
+function openModalByIndex(index) {
+    if (!visibleCards.length) {
+        return;
+    }
+    activeCardIndex = ((index % visibleCards.length) + visibleCards.length) % visibleCards.length;
+    renderActiveCard();
     document.getElementById('modalOverlay').classList.add('active');
 }
+
+function showPrevCard() {
+    if (!visibleCards.length) {
+        return;
+    }
+    openModalByIndex(activeCardIndex - 1);
+}
+
+function showNextCard() {
+    if (!visibleCards.length) {
+        return;
+    }
+    openModalByIndex(activeCardIndex + 1);
+}
+
 function closeModal() {
+    activeCardIndex = -1;
     document.getElementById('modalOverlay').classList.remove('active');
     document.getElementById('modalImg').src = '';
+    document.getElementById('modalImg').alt = '';
     document.getElementById('modalDownloadBtn').href = '#';
     document.getElementById('modalDeleteForm').action = '#';
 }
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') closeModal();
+
+document.querySelectorAll('.carta-img-wrap[data-card-index]').forEach(function (element) {
+    element.addEventListener('click', function () {
+        openModalByIndex(Number(element.dataset.cardIndex || 0));
+    });
 });
+
+document.getElementById('modalPrevBtn')?.addEventListener('click', function () {
+    showPrevCard();
+});
+
+document.getElementById('modalNextBtn')?.addEventListener('click', function () {
+    showNextCard();
+});
+
+document.addEventListener('keydown', function(e) {
+    if (!document.getElementById('modalOverlay').classList.contains('active')) {
+        return;
+    }
+    if (e.key === 'Escape') {
+        closeModal();
+    } else if (e.key === 'ArrowLeft') {
+        showPrevCard();
+    } else if (e.key === 'ArrowRight') {
+        showNextCard();
+    }
+});
+
+updateCarouselControls();
 </script>
 {% endblock %}
