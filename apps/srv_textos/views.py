@@ -441,6 +441,7 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
 
     layout_hab_font_size = int(lh.get('font_size', 33) or 33)
     hab_rules = lh.get('rules') if isinstance(lh.get('rules'), dict) else {}
+    raw_hab_rules = raw_lh.get('rules') if isinstance(raw_lh.get('rules'), dict) else {}
     hab_vertical_padding = int(lh.get('bg_padding', 19) or 19)
     hab_default_y = int(card_h * float(lh.get('y_ratio', 0.83) or 0.83))
     hab_default_w = int(card_w * float(lh.get('max_width_ratio', 0.74) or 0.74))
@@ -457,14 +458,19 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         and normalized_card_type == 'cripta'
         and has_habilidad_box
     )
-    libreria_box_semantics = hab_rules.get('box_semantics', 'bottom_anchor_margin')
+    raw_libreria_box_semantics = raw_hab_rules.get('box_semantics')
     is_libreria_bottom_anchor_margin = (
         normalized_card_type == 'libreria'
         and has_habilidad_box
-        and libreria_box_semantics in {'legacy', 'bottom_anchor_margin'}
+        and raw_libreria_box_semantics == 'bottom_anchor_margin'
+    )
+    is_libreria_legacy_visual_box = (
+        normalized_card_type == 'libreria'
+        and has_habilidad_box
+        and raw_libreria_box_semantics in {None, 'legacy'}
     )
     effective_hab_font_size = layout_hab_font_size
-    if (is_dynamic_bottom_anchor or is_libreria_bottom_anchor_margin) and hab_font_size is not None:
+    if (is_dynamic_bottom_anchor or is_libreria_bottom_anchor_margin or is_libreria_legacy_visual_box) and hab_font_size is not None:
         effective_hab_font_size = max(20, min(int(hab_font_size), 80))
 
     dynamic_hab_box_h = _compute_habilidad_dynamic_height(
@@ -479,6 +485,13 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
     if is_dynamic_bottom_anchor:
         hab_box_bottom = habilidad_box['y'] + habilidad_box['height']
         used_hab_box_y = max(0, hab_box_bottom - dynamic_hab_box_h)
+        used_hab_box_h = max(1, hab_box_bottom - used_hab_box_y)
+    elif is_libreria_legacy_visual_box:
+        hab_box_bottom = habilidad_box['y'] + habilidad_box['height']
+        legacy_visual_height = max(1, int(habilidad_box['height']))
+        vertical_margin = max(0, (legacy_visual_height - dynamic_hab_content_h) // 2)
+        outer_hab_box_h = max(1, dynamic_hab_content_h + (vertical_margin * 2))
+        used_hab_box_y = max(0, hab_box_bottom - outer_hab_box_h)
         used_hab_box_h = max(1, hab_box_bottom - used_hab_box_y)
     elif is_libreria_bottom_anchor_margin:
         hab_box_bottom = habilidad_box['y']
@@ -501,7 +514,7 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
 
     used_hab_box = {
         'x': habilidad_box['x'],
-        'y': used_hab_box_y if (is_dynamic_bottom_anchor or is_libreria_bottom_anchor_margin) else habilidad_box['y'] + max(0, habilidad_box['height'] - used_hab_box_h),
+        'y': used_hab_box_y if (is_dynamic_bottom_anchor or is_libreria_bottom_anchor_margin or is_libreria_legacy_visual_box) else habilidad_box['y'] + max(0, habilidad_box['height'] - used_hab_box_h),
         'width': habilidad_box['width'],
         'height': max(1, used_hab_box_h),
     }

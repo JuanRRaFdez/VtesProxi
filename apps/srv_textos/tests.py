@@ -856,7 +856,7 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             820,
         )
 
-    def test_libreria_habilidad_legacy_semantics_alias_grows_up_from_bottom(self):
+    def test_libreria_habilidad_legacy_semantics_preserves_legacy_visual_bottom_edge(self):
         config = normalize_layout_config('libreria', load_classic_seed('libreria'))
         config['habilidad']['rules']['box_semantics'] = 'legacy'
         config['habilidad']['box'] = {
@@ -874,11 +874,11 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
 
         self.assertEqual(
             metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
-            820,
+            844,
         )
-        self.assertLess(metrics['habilidad']['used_box']['y'], 820)
+        self.assertLess(metrics['habilidad']['used_box']['y'], 844)
 
-    def test_libreria_habilidad_missing_box_semantics_defaults_to_bottom_anchor_margin(self):
+    def test_libreria_habilidad_missing_box_semantics_preserves_legacy_visual_bottom_edge(self):
         config = normalize_layout_config('libreria', load_classic_seed('libreria'))
         del config['habilidad']['rules']['box_semantics']
         config['habilidad']['box'] = {
@@ -896,9 +896,36 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
 
         self.assertEqual(
             metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
-            820,
+            844,
         )
-        self.assertLess(metrics['habilidad']['used_box']['y'], 820)
+        self.assertLess(metrics['habilidad']['used_box']['y'], 844)
+
+    def test_libreria_disciplinas_follow_migrated_legacy_habilidad_box(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['rules']['box_semantics'] = 'legacy'
+        config['habilidad']['box'] = {
+            'x': 54,
+            'y': 678,
+            'width': 639,
+            'height': 290,
+        }
+        config['disciplinas']['box'] = {
+            'x': 54,
+            'y': 721,
+            'width': 85,
+            'height': 91,
+        }
+        config['disciplinas']['rules'] = {'anchor_mode': 'free', 'gap_from_habilidad': 31}
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            'Texto corto',
+            disciplinas=[{'name': 'dom', 'level': 'inf'}, {'name': 'tha', 'level': 'inf'}],
+        )
+
+        self.assertGreater(metrics['disciplinas']['box']['y'], 0)
+        self.assertEqual(metrics['disciplinas']['box']['y'], metrics['habilidad']['used_box']['y'] - 31)
 
     def test_disciplinas_vertical_anchor_uses_habilidad_gap_when_free(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))
