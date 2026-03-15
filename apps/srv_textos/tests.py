@@ -375,10 +375,35 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
             820,
         )
 
-    def test_parse_habilidad_does_not_treat_double_asterisks_as_special_markup(self):
-        segments = srv_textos_views._parse_habilidad('**Accion** de prueba')
+    def test_parse_habilidad_defaults_plain_text_to_normal(self):
+        segments = srv_textos_views._parse_habilidad('Accion de prueba')
 
-        self.assertEqual(segments, [{'text': '**Accion** de prueba', 'style': 'bold'}])
+        self.assertEqual(segments, [{'text': 'Accion de prueba', 'style': 'normal'}])
+
+    def test_parse_habilidad_uses_manual_bold_and_parentheses_italics(self):
+        segments = srv_textos_views._parse_habilidad('Texto **Accion** (rapida)')
+
+        self.assertEqual(
+            segments,
+            [
+                {'text': 'Texto ', 'style': 'normal'},
+                {'text': 'Accion', 'style': 'bold'},
+                {'text': ' ', 'style': 'normal'},
+                {'text': '(rapida)', 'style': 'italic'},
+            ],
+        )
+
+    def test_parse_habilidad_keeps_parentheses_italic_inside_explicit_bold(self):
+        segments = srv_textos_views._parse_habilidad('**Accion (sigilo)** final')
+
+        self.assertEqual(
+            segments,
+            [
+                {'text': 'Accion ', 'style': 'bold'},
+                {'text': '(sigilo)', 'style': 'italic'},
+                {'text': ' final', 'style': 'normal'},
+            ],
+        )
 
     def test_discipline_ref_to_code_supports_inline_code_case_semantics(self):
         self.assertEqual(srv_textos_views._discipline_ref_to_code('dom'), ('dom', False))

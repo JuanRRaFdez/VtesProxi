@@ -177,6 +177,17 @@
             opacity: 0.9;
             transform: scale(1.12);
         }
+        .habilidad-toolbar {
+            display: flex;
+            gap: 0.35rem;
+            margin-bottom: 0.35rem;
+        }
+        .habilidad-toolbar .btn {
+            min-width: 2.2rem;
+            padding: 0.18rem 0.45rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
     </style>
 {% endblock %}
 {% block content %}
@@ -319,7 +330,11 @@
                     <!-- Fila 5: Habilidad -->
                     <div class="mb-2">
                         <label for="habilidad" class="form-label">Habilidad <small class="text-muted">(Ctrl+Enter)</small></label>
-                        <textarea class="form-control form-control-sm" id="habilidad" name="habilidad" rows="3" placeholder="Sabbat cardinal: Texto de habilidad (cursiva). +1 bleed."></textarea>
+                        <div class="habilidad-toolbar">
+                            <button type="button" id="habilidad-bold-btn" class="btn btn-outline-secondary btn-sm" title="Negrita">B</button>
+                            <button type="button" id="habilidad-italic-btn" class="btn btn-outline-secondary btn-sm" title="Cursiva">I</button>
+                        </div>
+                        <textarea class="form-control form-control-sm" id="habilidad" name="habilidad" rows="3" placeholder="Texto normal. **Negrita** (cursiva)."></textarea>
                     </div>
                     <!-- Fila 6: Transparencia + Tamaño fuente -->
                     <div class="mb-2 row g-2">
@@ -856,6 +871,24 @@
 
         // --- HABILIDAD ---
         const habilidadInput = document.getElementById('habilidad');
+        const habilidadBoldBtn = document.getElementById('habilidad-bold-btn');
+        const habilidadItalicBtn = document.getElementById('habilidad-italic-btn');
+        function wrapHabilidadSelection(before, after) {
+            if (!habilidadInput) return;
+            const value = habilidadInput.value || '';
+            const start = habilidadInput.selectionStart || 0;
+            const end = habilidadInput.selectionEnd || 0;
+            const selected = value.slice(start, end);
+            const wrapped = before + selected + after;
+
+            habilidadInput.value = value.slice(0, start) + wrapped + value.slice(end);
+            habilidadInput.focus();
+
+            const cursorStart = start + before.length;
+            const cursorEnd = cursorStart + selected.length;
+            habilidadInput.setSelectionRange(cursorStart, cursorEnd);
+            renderHabilidad();
+        }
         function renderHabilidad() {
             const habilidad = habilidadInput.value.trim();
             const cartaImg = getCartaImg();
@@ -886,6 +919,12 @@
                 e.preventDefault();
                 renderHabilidad();
             }
+        });
+        habilidadBoldBtn && habilidadBoldBtn.addEventListener('click', function() {
+            wrapHabilidadSelection('**', '**');
+        });
+        habilidadItalicBtn && habilidadItalicBtn.addEventListener('click', function() {
+            wrapHabilidadSelection('(', ')');
         });
 
         // --- Slider de opacidad del fondo de habilidad ---

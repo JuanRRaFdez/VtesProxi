@@ -641,84 +641,7 @@ def _load_hab_fonts(size):
 
 # --- Helper: parsea texto de habilidad en segmentos con estilo ---
 def _parse_habilidad(text):
-    """
-    Reglas de formato:
-    1. Todo hasta los dos puntos ':' → bold
-    2. Después de ':' hasta el primer '+' precedido por '.' → normal
-         - Texto entre paréntesis '()' → italic
-    3. Desde ese '+' en adelante → bold
-    """
-    segments = []
-    if not text:
-        return segments
-
-    colon_idx = text.find(':')
-    if colon_idx == -1:
-        # Sin dos puntos: todo en bold
-        return [{'text': text, 'style': 'bold'}]
-
-    # Parte 1: hasta e incluyendo ':'
-    segments.append({'text': text[:colon_idx + 1], 'style': 'bold'})
-
-    rest = text[colon_idx + 1:]
-    if not rest:
-        return segments
-
-    # Encontrar el primer '+' que venga precedido por '.' (ignorando espacios)
-    plus_idx = None
-    for i, ch in enumerate(rest):
-        if ch != '+':
-            continue
-        j = i - 1
-        while j >= 0 and rest[j].isspace():
-            j -= 1
-        if j >= 0 and rest[j] == '.':
-            plus_idx = i
-            break
-
-    if plus_idx is not None:
-        normal_section = rest[:plus_idx]
-        bold_tail = rest[plus_idx:]
-    else:
-        normal_section = rest
-        bold_tail = ''
-
-    # Parsear sección normal buscando paréntesis (italic)
-    _parse_normal_with_parens(normal_section, segments)
-
-    if bold_tail.strip():
-        segments.append({'text': bold_tail, 'style': 'bold'})
-
-    return segments
-
-
-def _parse_normal_with_parens(text, segments):
-    """Divide texto normal en segmentos normal/italic según paréntesis."""
-    i = 0
-    while i < len(text):
-        paren_start = text.find('(', i)
-        if paren_start == -1:
-            if i < len(text):
-                segments.append({'text': text[i:], 'style': 'normal'})
-            break
-        # Texto antes del paréntesis
-        if paren_start > i:
-            segments.append({'text': text[i:paren_start], 'style': 'normal'})
-        # Texto dentro del paréntesis (incluidos los paréntesis)
-        paren_end = text.find(')', paren_start)
-        if paren_end == -1:
-            segments.append({'text': text[paren_start:], 'style': 'italic'})
-            break
-        segments.append({'text': text[paren_start:paren_end + 1], 'style': 'italic'})
-        i = paren_end + 1
-
-
-def _parse_libreria_habilidad(text):
-    """
-    Librería:
-    - Texto entre ** ** -> bold
-    - Resto -> normal
-    """
+    """Parsea formato manual: **bold** y (italic), sin reglas automáticas."""
     if not text:
         return []
 
@@ -728,18 +651,48 @@ def _parse_libreria_habilidad(text):
     while idx < len(text):
         marker = text.find('**', idx)
         if marker == -1:
-            chunk = text[idx:]
-            if chunk:
-                segments.append({'text': chunk, 'style': 'bold' if is_bold else 'normal'})
+            _append_habilidad_segments_with_parentheses(
+                text[idx:],
+                'bold' if is_bold else 'normal',
+                segments,
+            )
             break
 
-        chunk = text[idx:marker]
-        if chunk:
-            segments.append({'text': chunk, 'style': 'bold' if is_bold else 'normal'})
+        _append_habilidad_segments_with_parentheses(
+            text[idx:marker],
+            'bold' if is_bold else 'normal',
+            segments,
+        )
         is_bold = not is_bold
         idx = marker + 2
 
     return segments
+
+
+def _append_habilidad_segments_with_parentheses(text, base_style, segments):
+    """Divide un bloque en estilo base, forzando cursiva dentro de paréntesis."""
+    if not text:
+        return
+
+    i = 0
+    while i < len(text):
+        paren_start = text.find('(', i)
+        if paren_start == -1:
+            if i < len(text):
+                segments.append({'text': text[i:], 'style': base_style})
+            break
+        if paren_start > i:
+            segments.append({'text': text[i:paren_start], 'style': base_style})
+        paren_end = text.find(')', paren_start)
+        if paren_end == -1:
+            segments.append({'text': text[paren_start:], 'style': 'italic'})
+            break
+        segments.append({'text': text[paren_start:paren_end + 1], 'style': 'italic'})
+        i = paren_end + 1
+
+
+def _parse_libreria_habilidad(text):
+    return _parse_habilidad(text)
 
 
 def _split_parentheses_italic(text):

@@ -30,3 +30,19 @@ class ImportarImagenTemplateTests(SimpleTestCase):
 
         self.assertIn('function renderSenda()', template)
         self.assertNotIn("if (!senda) {\n                return;\n            }", template)
+
+    def test_habilidad_toolbar_buttons_and_wrapper_helper_exist(self):
+        template = Path(
+            settings.BASE_DIR,
+            'apps',
+            'cripta',
+            'templates',
+            'cripta',
+            'importar_imagen.html',
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('id="habilidad-bold-btn"', template)
+        self.assertIn('id="habilidad-italic-btn"', template)
+        self.assertIn('function wrapHabilidadSelection(before, after)', template)
+        self.assertIn("wrapHabilidadSelection('**', '**')", template)
+        self.assertIn("wrapHabilidadSelection('(', ')')", template)
