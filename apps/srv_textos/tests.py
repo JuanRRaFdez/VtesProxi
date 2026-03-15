@@ -300,6 +300,81 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
         self.assertEqual(len(common_calls), 1)
         mock_libreria_renderer.assert_not_called()
 
+    @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+    def test_render_habilidad_libreria_bottom_anchor_margin_passes_bottom_anchored_box_to_common_renderer(self):
+        image_path = os.path.join(settings.MEDIA_ROOT, 'recortes', 'test-bottom-anchor.png')
+        os.makedirs(os.path.dirname(image_path), exist_ok=True)
+        Image.new('RGBA', (745, 1040), (0, 0, 0, 0)).save(image_path)
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['rules']['box_semantics'] = 'bottom_anchor_margin'
+        config['habilidad']['box'] = {
+            'x': 170,
+            'y': 820,
+            'width': 420,
+            'height': 24,
+        }
+
+        with patch('apps.srv_textos.views._render_habilidad_text') as mock_render:
+            srv_textos_views._render_carta(
+                imagen_url='/media/recortes/test-bottom-anchor.png',
+                habilidad='Texto de prueba suficientemente largo para ocupar varias lineas dentro del cuadro de habilidad.',
+                card_type='libreria',
+                layout_config=config,
+            )
+
+        self.assertEqual(mock_render.call_count, 1)
+        _, _, hab_x, hab_y, hab_max_w, _, _ = mock_render.call_args.args[:7]
+        self.assertEqual(hab_x, 170)
+        self.assertEqual(hab_max_w, 420)
+        self.assertLess(hab_y, 820)
+        self.assertEqual(hab_y + mock_render.call_args.kwargs['box_height'], 820)
+
+    @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+    def test_render_habilidad_libreria_bottom_anchor_margin_grows_with_effective_font_size(self):
+        image_path = os.path.join(settings.MEDIA_ROOT, 'recortes', 'test-bottom-anchor-font.png')
+        os.makedirs(os.path.dirname(image_path), exist_ok=True)
+        Image.new('RGBA', (745, 1040), (0, 0, 0, 0)).save(image_path)
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['rules']['box_semantics'] = 'bottom_anchor_margin'
+        config['habilidad']['box'] = {
+            'x': 170,
+            'y': 820,
+            'width': 420,
+            'height': 24,
+        }
+        habilidad = 'Texto de habilidad suficientemente largo para notar el crecimiento del recuadro.'
+
+        with patch('apps.srv_textos.views._render_habilidad_text') as small_render:
+            srv_textos_views._render_carta(
+                imagen_url='/media/recortes/test-bottom-anchor-font.png',
+                habilidad=habilidad,
+                card_type='libreria',
+                layout_config=config,
+                hab_font_size=20,
+            )
+
+        with patch('apps.srv_textos.views._render_habilidad_text') as large_render:
+            srv_textos_views._render_carta(
+                imagen_url='/media/recortes/test-bottom-anchor-font.png',
+                habilidad=habilidad,
+                card_type='libreria',
+                layout_config=config,
+                hab_font_size=48,
+            )
+
+        self.assertGreater(
+            large_render.call_args.kwargs['box_height'],
+            small_render.call_args.kwargs['box_height'],
+        )
+        self.assertEqual(
+            small_render.call_args.args[3] + small_render.call_args.kwargs['box_height'],
+            820,
+        )
+        self.assertEqual(
+            large_render.call_args.args[3] + large_render.call_args.kwargs['box_height'],
+            820,
+        )
+
     def test_parse_habilidad_does_not_treat_double_asterisks_as_special_markup(self):
         segments = srv_textos_views._parse_habilidad('**Accion** de prueba')
 
@@ -689,6 +764,115 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
             400,
         )
+
+    def test_libreria_habilidad_bottom_anchor_margin_grows_up_from_bottom(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['rules']['box_semantics'] = 'bottom_anchor_margin'
+        config['habilidad']['box'] = {
+            'x': 170,
+            'y': 820,
+            'width': 420,
+            'height': 24,
+        }
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            'Texto de prueba suficientemente largo para ocupar varias lineas dentro del cuadro de habilidad.',
+        )
+
+        self.assertEqual(metrics['habilidad']['box']['y'], 820)
+        self.assertEqual(
+            metrics['habilidad']['used_box']['y'] + metrics['habilidad']['used_box']['height'],
+            820,
+        )
+        self.assertLess(metrics['habilidad']['used_box']['y'], 820)
+
+    def test_libreria_habilidad_bottom_anchor_margin_uses_symmetric_vertical_margin(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['rules']['box_semantics'] = 'bottom_anchor_margin'
+        config['habilidad']['font_size'] = 32
+        config['habilidad']['line_spacing'] = 4
+        config['habilidad']['bg_padding'] = 19
+        config['habilidad']['box'] = {
+            'x': 170,
+            'y': 820,
+            'width': 420,
+            'height': 26,
+        }
+        habilidad = 'Texto de prueba de varias lineas para medir el margen superior e inferior del recuadro.'
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            habilidad,
+        )
+
+        dynamic_height = srv_textos_views._compute_habilidad_dynamic_height(
+            habilidad=habilidad,
+            font_size=32,
+            max_width=420,
+            line_spacing=4,
+            padding=19,
+        )
+        content_height = dynamic_height - (19 * 2)
+
+        self.assertEqual(metrics['habilidad']['used_box']['height'], content_height + (26 * 2))
+
+    def test_libreria_habilidad_bottom_anchor_margin_grows_with_effective_font_size(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['rules']['box_semantics'] = 'bottom_anchor_margin'
+        config['habilidad']['box'] = {
+            'x': 170,
+            'y': 820,
+            'width': 420,
+            'height': 24,
+        }
+        habilidad = 'Texto de habilidad suficientemente largo para notar el crecimiento del recuadro.'
+
+        small_font_metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            habilidad,
+            hab_font_size=20,
+        )
+        large_font_metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            habilidad,
+            hab_font_size=48,
+        )
+
+        self.assertGreater(
+            large_font_metrics['habilidad']['used_box']['height'],
+            small_font_metrics['habilidad']['used_box']['height'],
+        )
+        self.assertEqual(
+            small_font_metrics['habilidad']['used_box']['y'] + small_font_metrics['habilidad']['used_box']['height'],
+            820,
+        )
+        self.assertEqual(
+            large_font_metrics['habilidad']['used_box']['y'] + large_font_metrics['habilidad']['used_box']['height'],
+            820,
+        )
+
+    def test_libreria_habilidad_without_bottom_anchor_margin_flag_keeps_legacy_box_semantics(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['box'] = {
+            'x': 170,
+            'y': 720,
+            'width': 420,
+            'height': 180,
+        }
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            'texto ' * 60,
+        )
+
+        self.assertEqual(metrics['habilidad']['used_box']['y'], 720)
+        self.assertEqual(metrics['habilidad']['used_box']['height'], 180)
 
     def test_disciplinas_vertical_anchor_uses_habilidad_gap_when_free(self):
         config = normalize_layout_config('cripta', load_classic_seed('cripta'))

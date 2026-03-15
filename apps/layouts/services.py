@@ -289,6 +289,20 @@ def _ensure_stack_box_section(normalized, section_name, *, bottom_anchored=False
         section['bottom'] = max(0, card_height - box['y'] - box['width'])
 
 
+def _ensure_habilidad_rules(normalized, card_type):
+    section = normalized.get('habilidad')
+    if not isinstance(section, dict):
+        return
+
+    rules = section.get('rules')
+    if not isinstance(rules, dict):
+        rules = {}
+        section['rules'] = rules
+
+    if card_type == 'libreria':
+        rules.setdefault('box_semantics', 'legacy')
+
+
 def normalize_layout_config(card_type, config):
     if not isinstance(config, dict):
         raise LayoutValidationError('config debe ser un objeto JSON')
@@ -307,6 +321,7 @@ def normalize_layout_config(card_type, config):
     else:
         _ensure_stack_box_section(normalized, 'simbolos')
     _ensure_square_coste_section(normalized)
+    _ensure_habilidad_rules(normalized, normalized_card_type)
     return normalized
 
 
@@ -366,6 +381,20 @@ def _validate_stack_rules(section_name, rules, allowed_anchor_modes):
     anchor_mode = rules.get('anchor_mode', 'free')
     if anchor_mode not in allowed_anchor_modes:
         raise LayoutValidationError(f'{section_name}.rules.anchor_mode inválido')
+
+
+def _validate_habilidad_rules(card_type, rules):
+    if rules is None:
+        rules = {}
+    if not isinstance(rules, dict):
+        raise LayoutValidationError('habilidad.rules debe ser un objeto')
+
+    if card_type != 'libreria':
+        return
+
+    box_semantics = rules.get('box_semantics', 'legacy')
+    if box_semantics not in {'legacy', 'bottom_anchor_margin'}:
+        raise LayoutValidationError('habilidad.rules.box_semantics inválido')
 
 
 def validate_layout_config(card_type, config):
@@ -439,6 +468,7 @@ def validate_layout_config(card_type, config):
     if isinstance(habilidad.get('box'), dict):
         _validate_box('habilidad', habilidad)
     _validate_habilidad_box(habilidad)
+    _validate_habilidad_rules(normalized_card_type, habilidad.get('rules'))
 
     coste = normalized['coste']
     _expect_number(coste, 'size', 8, 300)

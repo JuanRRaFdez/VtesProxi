@@ -290,6 +290,19 @@ class LayoutConfigBoxSchemaTests(TestCase):
         self.assertEqual(normalized['simbolos']['box']['width'], normalized['simbolos']['size'])
         self.assertEqual(normalized['simbolos']['box']['height'], normalized['simbolos']['spacing'] * 3)
 
+    def test_normalize_libreria_habilidad_defaults_to_legacy_box_semantics(self):
+        normalized = normalize_layout_config('libreria', load_classic_seed('libreria'))
+
+        self.assertEqual(normalized['habilidad']['rules']['box_semantics'], 'legacy')
+
+    def test_normalize_libreria_preserves_bottom_anchor_margin_box_semantics(self):
+        config = load_classic_seed('libreria')
+        config['habilidad']['rules'] = {'box_semantics': 'bottom_anchor_margin'}
+
+        normalized = normalize_layout_config('libreria', config)
+
+        self.assertEqual(normalized['habilidad']['rules']['box_semantics'], 'bottom_anchor_margin')
+
 
 class LayoutConfigValidationV2Tests(TestCase):
     def test_validate_rejects_invalid_align(self):
@@ -344,6 +357,13 @@ class LayoutConfigValidationV2Tests(TestCase):
     def test_validate_rejects_invalid_habilidad_box(self):
         config = normalize_layout_config('libreria', load_classic_seed('libreria'))
         config['habilidad']['box'] = {'x': 170, 'y': 600, 'width': -1, 'height': 180}
+
+        with self.assertRaises(LayoutValidationError):
+            validate_layout_config('libreria', config)
+
+    def test_validate_rejects_invalid_libreria_habilidad_box_semantics(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['rules']['box_semantics'] = 'nope'
 
         with self.assertRaises(LayoutValidationError):
             validate_layout_config('libreria', config)
@@ -545,6 +565,14 @@ class LayoutEditorStaticAssetTests(SimpleTestCase):
 
         self.assertIn('prop-disciplinas-fixed', script)
         self.assertIn('fixed_bottom', script)
+
+    def test_editor_script_defines_libreria_habilidad_bottom_anchor_margin_flow(self):
+        script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')
+
+        self.assertIn('box_semantics', script)
+        self.assertIn('bottom_anchor_margin', script)
+        self.assertIn("state.cardType === 'libreria'", script)
+        self.assertIn("layerName === 'habilidad'", script)
 
     def test_editor_script_persists_disciplina_anchor_and_gap_for_all_card_types(self):
         script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')

@@ -205,6 +205,65 @@
         }
     }
 
+    function usesLibreriaHabilidadBottomAnchorEditor(layerName, section) {
+        return layerName === 'habilidad'
+            && state.cardType === 'libreria'
+            && section
+            && typeof section === 'object';
+    }
+
+    function isLibreriaBottomAnchorMargin(layerName, section) {
+        return usesLibreriaHabilidadBottomAnchorEditor(layerName, section)
+            && section.rules
+            && section.rules.box_semantics === 'bottom_anchor_margin';
+    }
+
+    function getHabilidadPreviewContentHeight(section) {
+        const fontSize = Math.max(8, Math.round(Number(section.font_size || 33)));
+        const lineSpacing = Math.max(0, Math.round(Number(section.line_spacing || 4)));
+        return Math.max(30, fontSize + lineSpacing);
+    }
+
+    function getHabilidadPreviewFrame(section, carta) {
+        const cardWidth = Number(carta.width || 745);
+        const cardHeight = Number(carta.height || 1040);
+        const rawBox = section.box && typeof section.box === 'object' ? section.box : {};
+        const width = Math.max(
+            30,
+            Math.round(Number(
+                rawBox.width != null ? rawBox.width : (cardWidth * Number(section.max_width_ratio || 0.5))
+            )),
+        );
+        const anchorX = Math.max(0, Math.round(Number(rawBox.x != null ? rawBox.x : (section.x || 0))));
+        const previewContentHeight = getHabilidadPreviewContentHeight(section);
+        const semantics = isLibreriaBottomAnchorMargin('habilidad', section) ? 'bottom_anchor_margin' : 'legacy';
+        let anchorY = Math.max(
+            0,
+            Math.round(Number(
+                rawBox.y != null ? rawBox.y : (
+                    section.y != null ? section.y : Math.round(cardHeight * Number(section.y_ratio || 0))
+                )
+            )),
+        );
+        let outerHeight = Math.max(30, Math.round(Number(rawBox.height || 0)));
+        let verticalMargin = Math.max(0, Math.round(Number(rawBox.height || 0)));
+
+        if (semantics === 'bottom_anchor_margin') {
+            outerHeight = Math.max(30, previewContentHeight + (verticalMargin * 2));
+        } else {
+            outerHeight = Math.max(30, Math.round(Number(rawBox.height || 170)));
+            anchorY = Math.max(0, anchorY + outerHeight);
+            verticalMargin = Math.max(0, Math.round((outerHeight - previewContentHeight) / 2));
+        }
+
+        return normalizeFrameForLayer('habilidad', {
+            x: anchorX,
+            y: Math.max(0, anchorY - outerHeight),
+            width: width,
+            height: outerHeight,
+        });
+    }
+
     function ensureSectionShadow(section) {
         if (!section.shadow || typeof section.shadow !== 'object') {
             section.shadow = {};
@@ -220,6 +279,11 @@
             ? state.config.habilidad
             : {};
 
+        ensureSectionRules('habilidad', habilidad);
+        if (usesLibreriaHabilidadBottomAnchorEditor('habilidad', habilidad)) {
+            const frame = getHabilidadPreviewFrame(habilidad, carta);
+            return Math.max(0, Math.round(frame.y));
+        }
         if (habilidad.box && typeof habilidad.box === 'object') {
             return Math.max(0, Math.round(Number(habilidad.box.y || 0)));
         }
@@ -307,12 +371,20 @@
             });
         }
         if (section.box && typeof section.box === 'object') {
+            ensureSectionRules(layerName, section);
+            if (usesLibreriaHabilidadBottomAnchorEditor(layerName, section)) {
+                return getHabilidadPreviewFrame(section, carta);
+            }
             return normalizeFrameForLayer(layerName, {
                 x: Math.max(0, Math.round(Number(section.box.x || 0))),
                 y: Math.max(0, Math.round(Number(section.box.y || 0))),
                 width: Math.max(30, Math.round(Number(section.box.width || 30))),
                 height: Math.max(30, Math.round(Number(section.box.height || 30))),
             });
+        }
+        if (usesLibreriaHabilidadBottomAnchorEditor(layerName, section)) {
+            ensureSectionRules(layerName, section);
+            return getHabilidadPreviewFrame(section, carta);
         }
 
         let x = Number(section.x || 0);
@@ -366,8 +438,8 @@
         const cardHeight = Number(carta.height || 1040);
         const normalizedFrame = normalizeFrameForLayer(layerName, frame);
         const profile = profileForLayer(layerName);
+        ensureSectionRules(layerName, section);
         if (layerName === 'disciplinas') {
-            ensureSectionRules(layerName, section);
             const anchorY = Math.max(0, Math.round(normalizedFrame.y + normalizedFrame.height));
             section.x = Math.round(normalizedFrame.x);
             section.y = anchorY;
@@ -385,6 +457,22 @@
             } else {
                 section.rules.gap_from_habilidad = Math.max(0, Math.round(getHabilidadTop(carta) - anchorY));
             }
+            return;
+        }
+        if (usesLibreriaHabilidadBottomAnchorEditor(layerName, section)) {
+            const anchorY = Math.max(0, Math.round(normalizedFrame.y + normalizedFrame.height));
+            const previewContentHeight = getHabilidadPreviewContentHeight(section);
+            const verticalMargin = Math.max(0, Math.round((normalizedFrame.height - previewContentHeight) / 2));
+            section.rules.box_semantics = 'bottom_anchor_margin';
+            section.x = Math.round(normalizedFrame.x);
+            section.y = anchorY;
+            section.box = {
+                x: Math.round(normalizedFrame.x),
+                y: anchorY,
+                width: Math.max(30, Math.round(normalizedFrame.width)),
+                height: verticalMargin,
+            };
+            section.max_width_ratio = Math.max(0, Math.min(1, normalizedFrame.width / cardWidth));
             return;
         }
         section.x = Math.round(normalizedFrame.x);
@@ -427,7 +515,7 @@
         }
     }
 
-    function updatePropertyInputs(layerName, frame) {
+    function updatePropertyInputs(layerName, frame, section) {
         if (!frame) {
             propX.value = '';
             propY.value = '';
@@ -443,6 +531,16 @@
             propY.value = frame.y + frame.height;
             return;
         }
+        if (usesLibreriaHabilidadBottomAnchorEditor(layerName, section)) {
+            propY.value = frame.y + frame.height;
+            if (isLibreriaBottomAnchorMargin(layerName, section)) {
+                propHeight.value = Math.max(0, Math.round(Number((section.box || {}).height || 0)));
+            } else {
+                const previewContentHeight = getHabilidadPreviewContentHeight(section);
+                propHeight.value = Math.max(0, Math.round((frame.height - previewContentHeight) / 2));
+            }
+            return;
+        }
         propY.value = frame.y;
     }
 
@@ -454,7 +552,7 @@
 
         if (!layerName) {
             selectedNameEl.textContent = 'Selecciona una capa';
-            updatePropertyInputs(null, null);
+            updatePropertyInputs(null, null, null);
             updateAdvancedInputs(null, null);
             return;
         }
@@ -462,12 +560,12 @@
         selectedNameEl.textContent = layerName;
         const section = sectionForLayer(layerName);
         if (!section) {
-            updatePropertyInputs(null, null);
+            updatePropertyInputs(null, null, null);
             updateAdvancedInputs(null, null);
             return;
         }
         const frame = frameFromSection(layerName, section, state.config.carta || {});
-        updatePropertyInputs(layerName, frame);
+        updatePropertyInputs(layerName, frame, section);
         updateAdvancedInputs(layerName, section);
     }
 
@@ -676,6 +774,15 @@
                 y: frame.y - frame.height,
                 width: frame.width,
                 height: frame.height,
+            };
+        } else if (usesLibreriaHabilidadBottomAnchorEditor(state.selectedLayer, section)) {
+            const verticalMargin = Math.max(0, Math.round(Number(propHeight.value || 0)));
+            const outerHeight = Math.max(30, getHabilidadPreviewContentHeight(section) + (verticalMargin * 2));
+            frame = {
+                x: frame.x,
+                y: frame.y - outerHeight,
+                width: frame.width,
+                height: outerHeight,
             };
         }
         applyFrameToSection(state.selectedLayer, section, frame, state.config.carta || {});
