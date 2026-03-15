@@ -740,8 +740,11 @@ def _split_parentheses_italic(text):
 
 def _discipline_ref_to_code(label):
     raw = (label or '').strip()
+    if not raw:
+        return None, False
+
+    is_superior = raw.isupper() and raw.lower() != raw
     low = raw.lower()
-    is_superior = False
     if low.startswith('superior '):
         is_superior = True
         raw = raw[9:].strip()
@@ -790,7 +793,8 @@ def _discipline_ref_to_code(label):
         'visceratika': 'vis',
     }
 
-    code = aliases.get(low)
+    direct_codes = set(aliases.values())
+    code = low if low in direct_codes else aliases.get(low)
     return code, is_superior
 
 
@@ -820,6 +824,71 @@ def _special_symbol_path(symbol):
     return None
 
 
+def _inline_symbol_path(symbol):
+    raw = (symbol or '').strip()
+    if raw.startswith('[') and raw.endswith(']'):
+        code, is_superior = _discipline_ref_to_code(raw[1:-1])
+        if code:
+            return _discipline_symbol_path(code, is_superior)
+        return None
+    return _special_symbol_path(raw)
+
+
+def _append_text_tokens_with_inline_symbols(tokens, text, font, style, font_size):
+    parts = re.split(r'(\[[^\]]+\])', text or '')
+    for part in parts:
+        if not part:
+            continue
+
+        icon_path = _inline_symbol_path(part)
+        if icon_path:
+            tokens.append({
+                'type': 'symbol',
+                'path': icon_path,
+                'size': max(20, int(font_size * 1.05)),
+                'gap': max(4, int(font_size * 0.18)),
+                'style': style,
+                'font': font,
+            })
+            continue
+
+        normalized = part.replace('Ⓓ', ' Ⓓ ')
+        if style == 'italic':
+            if normalized:
+                tokens.append({
+                    'type': 'text',
+                    'text': normalized,
+                    'font': font,
+                    'style': 'italic',
+                })
+            continue
+
+        words = normalized.split(' ')
+        for wi, word in enumerate(words):
+            if wi > 0:
+                word = ' ' + word
+            if not word:
+                continue
+            raw_word = word.strip()
+            icon_path = _inline_symbol_path(raw_word)
+            if icon_path:
+                tokens.append({
+                    'type': 'symbol',
+                    'path': icon_path,
+                    'size': max(20, int(font_size * 1.05)),
+                    'gap': max(4, int(font_size * 0.18)),
+                    'style': style,
+                    'font': font,
+                })
+                continue
+            tokens.append({
+                'type': 'text',
+                'text': word,
+                'font': font,
+                'style': style,
+            })
+
+
 def _segment_to_tokens_libreria(segments, font_size):
     font_bold, font_normal = _load_hab_fonts(font_size)
     tokens = []
@@ -833,57 +902,18 @@ def _segment_to_tokens_libreria(segments, font_size):
             if not part:
                 continue
 
-            if part.startswith('[') and part.endswith(']'):
-                code, is_sup = _discipline_ref_to_code(part[1:-1])
-                if code:
-                    symbol_size = max(20, int(font_size * 1.05))
-                    symbol_path = _discipline_symbol_path(code, is_sup)
-                    if symbol_path:
-                        tokens.append({
-                            'type': 'symbol',
-                            'path': symbol_path,
-                            'size': symbol_size,
-                            'gap': max(4, int(font_size * 0.18))
-                        })
-                        continue
-
             lines = part.split('\n')
             for li, line in enumerate(lines):
                 if line:
                     spans = _split_parentheses_italic(line)
                     for span in spans:
-                        normalized = span['text'].replace('Ⓓ', ' Ⓓ ')
-                        if span['italic']:
-                            if normalized:
-                                tokens.append({
-                                    'type': 'text',
-                                    'text': normalized,
-                                    'font': font,
-                                    'style': 'italic',
-                                })
-                        else:
-                            words = normalized.split(' ')
-                            for wi, word in enumerate(words):
-                                if wi > 0:
-                                    word = ' ' + word
-                                if word:
-                                    raw_word = word.strip()
-                                    icon_path = _special_symbol_path(raw_word)
-                                    if icon_path:
-                                        symbol_size = max(20, int(font_size * 1.05))
-                                        tokens.append({
-                                            'type': 'symbol',
-                                            'path': icon_path,
-                                            'size': symbol_size,
-                                            'gap': max(4, int(font_size * 0.18))
-                                        })
-                                        continue
-                                    tokens.append({
-                                        'type': 'text',
-                                        'text': word,
-                                        'font': font,
-                                        'style': style,
-                                    })
+                        _append_text_tokens_with_inline_symbols(
+                            tokens,
+                            span['text'],
+                            font,
+                            'italic' if span['italic'] else style,
+                            font_size,
+                        )
                 if li < len(lines) - 1:
                     tokens.append({'type': 'newline'})
 
@@ -913,29 +943,7 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     for seg in segments:
         style = seg['style']
         font = font_bold if style == 'bold' else font_normal
-        normalized = seg['text'].replace('Ⓓ', ' Ⓓ ')
-        if style == 'italic':
-            if normalized:
-                words.append({'type': 'text', 'text': normalized, 'style': style, 'font': font})
-        else:
-            parts = normalized.split(' ')
-            for idx, part in enumerate(parts):
-                if idx > 0:
-                    part = ' ' + part
-                if part:
-                    raw_part = part.strip()
-                    icon_path = _special_symbol_path(raw_part)
-                    if icon_path:
-                        words.append({
-                            'type': 'symbol',
-                            'path': icon_path,
-                            'size': max(20, int(font_size * 1.05)),
-                            'gap': max(4, int(font_size * 0.18)),
-                            'style': style,
-                            'font': font,
-                        })
-                    else:
-                        words.append({'type': 'text', 'text': part, 'style': style, 'font': font})
+        _append_text_tokens_with_inline_symbols(words, seg['text'], font, style, font_size)
 
     line_height = font_size + line_spacing
     cur_x = content_x

@@ -277,6 +277,84 @@ class TextInBoxHelpersTests(SimpleTestCase):
 
 
 class HabilidadRenderAlignmentTests(SimpleTestCase):
+    def test_discipline_ref_to_code_supports_inline_code_case_semantics(self):
+        self.assertEqual(srv_textos_views._discipline_ref_to_code('dom'), ('dom', False))
+        self.assertEqual(srv_textos_views._discipline_ref_to_code('DOM'), ('dom', True))
+        self.assertEqual(srv_textos_views._discipline_ref_to_code('superior Dominate'), ('dom', True))
+
+    def test_segment_to_tokens_libreria_resolves_inline_discipline_symbols(self):
+        tokens = srv_textos_views._segment_to_tokens_libreria(
+            [{'text': 'Gana [dom] y [DOM].', 'style': 'normal'}],
+            font_size=26,
+        )
+
+        symbol_paths = [token['path'] for token in tokens if token.get('type') == 'symbol']
+
+        self.assertEqual(len(symbol_paths), 2)
+        self.assertTrue(any(path.endswith('static/disc_inf/dom.png') for path in symbol_paths))
+        self.assertTrue(any(path.endswith('static/disc_sup/dom.png') for path in symbol_paths))
+
+    def test_segment_to_tokens_libreria_keeps_unknown_markers_as_text(self):
+        tokens = srv_textos_views._segment_to_tokens_libreria(
+            [{'text': 'Texto [xyz] raro', 'style': 'normal'}],
+            font_size=26,
+        )
+
+        text_parts = [token['text'] for token in tokens if token.get('type') == 'text']
+
+        self.assertIn('[xyz]', text_parts)
+        self.assertFalse(any(token.get('type') == 'symbol' for token in tokens))
+
+    def test_render_habilidad_cripta_loads_inline_inferior_and_superior_discipline_symbols(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+        fake_symbol = Image.new('RGBA', (24, 24), (255, 255, 255, 255))
+
+        with patch('apps.srv_textos.views._load_symbol', return_value=fake_symbol) as mock_load_symbol:
+            srv_textos_views._render_habilidad_text(
+                image=image,
+                text='Accion: gana [dom] y [DOM].',
+                x=100,
+                y=120,
+                max_width=220,
+                font_size=28,
+                color='white',
+                bg_opacity=0,
+                bg_padding=12,
+                bg_radius=0,
+                line_spacing=3,
+                bg_color=(0, 0, 0),
+                box_height=140,
+            )
+
+        symbol_paths = [call.args[0] for call in mock_load_symbol.call_args_list]
+        self.assertTrue(any(path.endswith('static/disc_inf/dom.png') for path in symbol_paths))
+        self.assertTrue(any(path.endswith('static/disc_sup/dom.png') for path in symbol_paths))
+
+    def test_render_habilidad_libreria_loads_inline_inferior_and_superior_discipline_symbols(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+        fake_symbol = Image.new('RGBA', (24, 24), (255, 255, 255, 255))
+
+        with patch('apps.srv_textos.views._load_symbol', return_value=fake_symbol) as mock_load_symbol:
+            srv_textos_views._render_habilidad_text_libreria(
+                image=image,
+                text='**Accion** [dom] y [DOM]',
+                x=90,
+                y=110,
+                max_width=220,
+                font_size=26,
+                color='white',
+                bg_opacity=0,
+                bg_padding=10,
+                bg_radius=0,
+                line_spacing=3,
+                bg_color=(0, 0, 0),
+                box_height=130,
+            )
+
+        symbol_paths = [call.args[0] for call in mock_load_symbol.call_args_list]
+        self.assertTrue(any(path.endswith('static/disc_inf/dom.png') for path in symbol_paths))
+        self.assertTrue(any(path.endswith('static/disc_sup/dom.png') for path in symbol_paths))
+
     def test_render_habilidad_uses_box_origin_as_outer_top_left(self):
         image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
 
