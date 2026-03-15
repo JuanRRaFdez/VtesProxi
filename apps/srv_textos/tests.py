@@ -405,6 +405,47 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
             ],
         )
 
+    def test_append_text_tokens_with_inline_symbols_emits_newline_tokens(self):
+        _, font_normal = srv_textos_views._load_hab_fonts(28)
+        tokens = []
+
+        srv_textos_views._append_text_tokens_with_inline_symbols(
+            tokens,
+            ' \nSuccessful referendum',
+            font_normal,
+            'normal',
+            28,
+        )
+
+        self.assertTrue(any(token.get('type') == 'newline' for token in tokens))
+        self.assertTrue(any(token.get('text') == 'Successful' for token in tokens if token.get('type') == 'text'))
+        self.assertFalse(any('\n' in token.get('text', '') for token in tokens if token.get('type') == 'text'))
+
+    def test_render_habilidad_does_not_draw_embedded_newlines_inside_words(self):
+        image = Image.new('RGBA', (520, 520), (0, 0, 0, 0))
+
+        with patch('apps.srv_textos.views.ImageDraw.ImageDraw.text', autospec=True) as mock_draw_text:
+            srv_textos_views._render_habilidad_text(
+                image=image,
+                text='**Only one Ancient Influence can be played or called in a game.** \n'
+                     'Successful referendum means each Methuselah can choose a ready vampire they control.',
+                x=80,
+                y=100,
+                max_width=300,
+                font_size=28,
+                color='white',
+                bg_opacity=0,
+                bg_padding=10,
+                bg_radius=0,
+                line_spacing=3,
+                bg_color=(0, 0, 0),
+                box_height=180,
+            )
+
+        drawn_texts = [call.args[2] for call in mock_draw_text.call_args_list]
+        self.assertIn('Successful', drawn_texts)
+        self.assertFalse(any('\n' in text for text in drawn_texts))
+
     def test_discipline_ref_to_code_supports_inline_code_case_semantics(self):
         self.assertEqual(srv_textos_views._discipline_ref_to_code('dom'), ('dom', False))
         self.assertEqual(srv_textos_views._discipline_ref_to_code('DOM'), ('dom', True))

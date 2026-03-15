@@ -817,6 +817,14 @@ def _inline_symbol_path(symbol):
 
 
 def _append_text_tokens_with_inline_symbols(tokens, text, font, style, font_size):
+    lines = (text or '').split('\n')
+    for line_idx, line in enumerate(lines):
+        _append_text_tokens_for_single_line(tokens, line, font, style, font_size)
+        if line_idx < len(lines) - 1:
+            tokens.append({'type': 'newline'})
+
+
+def _append_text_tokens_for_single_line(tokens, text, font, style, font_size):
     parts = re.split(r'(\[[^\]]+\])', text or '')
     for part in parts:
         if not part:
@@ -932,6 +940,10 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     cur_y = content_y
     max_right = content_x
     for word_info in words:
+        if word_info.get('type') == 'newline':
+            cur_x = content_x
+            cur_y += line_height
+            continue
         if word_info.get('type') == 'symbol':
             w_width = word_info['size'] + word_info['gap']
             w_text = None
@@ -978,6 +990,11 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     current_line = []
     cur_x = content_x
     for word_info in words:
+        if word_info.get('type') == 'newline':
+            lines.append(current_line)
+            current_line = []
+            cur_x = content_x
+            continue
         w_font = word_info['font']
         w_style = word_info['style']
         if word_info.get('type') == 'symbol':
