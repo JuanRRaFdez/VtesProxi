@@ -565,6 +565,7 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
             line_spacing=3,
             bg_color=(0, 0, 0),
             box_height=130,
+            use_visual_content_height=True,
         )
 
         bounds = image.getchannel('A').getbbox()
@@ -620,6 +621,57 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
         bottom_gap = (110 + 130) - bounds[3]
 
         self.assertLessEqual(abs(top_gap - bottom_gap), 20)
+
+    def test_render_habilidad_libreria_visible_gaps_follow_configured_vertical_margin(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['rules']['box_semantics'] = 'bottom_anchor_margin'
+        config['habilidad']['box'] = {
+            'x': 54,
+            'y': 971,
+            'width': 639,
+            'height': 17,
+        }
+        config['habilidad']['bg_padding'] = 19
+        text = (
+            '**Only one Ancient Influence can be played or called in a game.**\n'
+            'Successful referendum means each Methuselah can choose a ready vampire they control. '
+            "Each Methuselah gains pool equal to their chosen vampire's capacity, then burns 5 pool."
+        )
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            text,
+            hab_font_size=32,
+        )
+        hab_box = metrics['habilidad']['used_box']
+        image = Image.new('RGBA', (745, 1040), (0, 0, 0, 0))
+
+        srv_textos_views._render_habilidad_text(
+            image=image,
+            text=text,
+            x=hab_box['x'],
+            y=hab_box['y'],
+            max_width=hab_box['width'],
+            font_size=32,
+            color='white',
+            bg_opacity=0,
+            bg_padding=config['habilidad']['bg_padding'],
+            vertical_padding=metrics['habilidad']['vertical_padding'],
+            bg_radius=0,
+            line_spacing=config['habilidad']['line_spacing'],
+            bg_color=(0, 0, 0),
+            box_height=hab_box['height'],
+            use_visual_content_height=True,
+        )
+
+        bounds = image.getchannel('A').getbbox()
+        top_gap = bounds[1] - hab_box['y']
+        bottom_gap = (hab_box['y'] + hab_box['height']) - bounds[3]
+
+        self.assertLessEqual(top_gap, 25)
+        self.assertLessEqual(bottom_gap, 25)
+        self.assertLessEqual(abs(top_gap - bottom_gap), 8)
 
     def test_render_habilidad_can_use_vertical_padding_independent_from_bg_padding(self):
         image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
@@ -899,14 +951,13 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             habilidad,
         )
 
-        dynamic_height = srv_textos_views._compute_habilidad_dynamic_height(
+        content_height = srv_textos_views._compute_habilidad_visual_content_height(
             habilidad=habilidad,
             font_size=32,
             max_width=420,
             line_spacing=4,
-            padding=19,
+            horizontal_padding=19,
         )
-        content_height = dynamic_height - (19 * 2)
 
         self.assertEqual(metrics['habilidad']['used_box']['height'], content_height + (26 * 2))
 
@@ -930,14 +981,13 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
             habilidad,
         )
 
-        dynamic_height = srv_textos_views._compute_habilidad_dynamic_height(
+        content_height = srv_textos_views._compute_habilidad_visual_content_height(
             habilidad=habilidad,
             font_size=32,
             max_width=420,
             line_spacing=4,
-            padding=19,
+            horizontal_padding=19,
         )
-        content_height = dynamic_height - (19 * 2)
 
         self.assertEqual(metrics['habilidad']['used_box']['height'], content_height + (4 * 2))
 

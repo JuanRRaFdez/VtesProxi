@@ -238,6 +238,101 @@ def _compute_habilidad_dynamic_height(habilidad, font_size, max_width, line_spac
     return int((line_count * (font_size + line_spacing)) + max(0, padding * 2))
 
 
+def _build_habilidad_word_tokens(text, font_size):
+    font_bold, font_normal = _load_hab_fonts(font_size)
+    segments = _parse_habilidad(text)
+    if not segments:
+        return []
+
+    words = []
+    for seg in segments:
+        style = seg['style']
+        font = font_bold if style == 'bold' else font_normal
+        _append_text_tokens_with_inline_symbols(words, seg['text'], font, style, font_size)
+    return words
+
+
+def _wrap_habilidad_word_tokens(words, content_width):
+    lines = []
+    current_line = []
+    current_width = 0
+    content_width = max(1, int(content_width))
+
+    for word_info in words:
+        if word_info.get('type') == 'newline':
+            lines.append(current_line)
+            current_line = []
+            current_width = 0
+            continue
+
+        wrapped_word = dict(word_info)
+        if wrapped_word.get('type') == 'symbol':
+            word_width = wrapped_word['size'] + wrapped_word['gap']
+        else:
+            text = wrapped_word['text']
+            bbox = wrapped_word['font'].getbbox(text)
+            word_width = bbox[2] - bbox[0]
+
+        if current_width + word_width > content_width and current_width > 0:
+            lines.append(current_line)
+            current_line = []
+            current_width = 0
+            if wrapped_word.get('type') == 'text' and wrapped_word['text'].startswith(' '):
+                wrapped_word['text'] = wrapped_word['text'].lstrip(' ')
+                bbox = wrapped_word['font'].getbbox(wrapped_word['text'])
+                word_width = bbox[2] - bbox[0]
+
+        current_line.append(wrapped_word)
+        current_width += word_width
+
+    if current_line:
+        lines.append(current_line)
+
+    return lines
+
+
+def _measure_habilidad_visual_block(lines, line_height, font_size):
+    visual_top = None
+    visual_bottom = None
+    cur_y = 0
+    icon_vertical_nudge = max(2, int(font_size * 0.16))
+
+    for line in lines:
+        for token in line:
+            if token.get('type') == 'symbol':
+                token_top = cur_y + max(0, (line_height - token['size']) // 2) - icon_vertical_nudge
+                token_bottom = token_top + token['size']
+            else:
+                rendered = token['text'].lstrip(' ')
+                if not rendered:
+                    continue
+                bbox = token['font'].getbbox(rendered)
+                token_top = cur_y + bbox[1]
+                token_bottom = cur_y + bbox[3]
+
+            visual_top = token_top if visual_top is None else min(visual_top, token_top)
+            visual_bottom = token_bottom if visual_bottom is None else max(visual_bottom, token_bottom)
+
+        cur_y += line_height
+
+    if visual_top is None or visual_bottom is None:
+        return 0, max(1, line_height), max(1, line_height)
+
+    return int(visual_top), int(visual_bottom), max(1, int(visual_bottom - visual_top))
+
+
+def _compute_habilidad_visual_content_height(habilidad, font_size, max_width, line_spacing, horizontal_padding):
+    words = _build_habilidad_word_tokens(habilidad, font_size)
+    if not words:
+        return max(1, int(font_size))
+
+    usable_width = max(1, int(max_width) - max(0, int(horizontal_padding * 2)))
+    line_height = int(font_size) + int(line_spacing)
+    lines = _wrap_habilidad_word_tokens(words, usable_width)
+    _, _, visual_height = _measure_habilidad_visual_block(lines, line_height, font_size)
+    return visual_height
+
+
 def _compute_disc_metrics_from_box(box, icon_count):
     normalized_count = max(1, int(icon_count or 0))
     size = max(1, int(box['width']))
@@ -471,6 +566,7 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
     )
     effective_hab_font_size = layout_hab_font_size
     render_hab_vertical_padding = hab_vertical_padding
+    use_visual_hab_content_height = False
     if (is_dynamic_bottom_anchor or is_libreria_bottom_anchor_margin or is_libreria_legacy_visual_box) and hab_font_size is not None:
         effective_hab_font_size = max(20, min(int(hab_font_size), 80))
 
@@ -482,6 +578,13 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         padding=hab_vertical_padding,
     )
     dynamic_hab_content_h = max(1, int(dynamic_hab_box_h) - max(0, hab_vertical_padding * 2))
+    visual_hab_content_h = _compute_habilidad_visual_content_height(
+        habilidad=habilidad,
+        font_size=effective_hab_font_size,
+        max_width=habilidad_box['width'],
+        line_spacing=int(lh.get('line_spacing', 4) or 4),
+        horizontal_padding=hab_vertical_padding,
+    )
 
     if is_dynamic_bottom_anchor:
         hab_box_bottom = habilidad_box['y'] + habilidad_box['height']
@@ -492,14 +595,17 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         # Legacy libreria boxes stored the full visual height. Preserve only the
         # inherited bottom edge and let the actual height respond to content.
         vertical_margin = max(0, int(hab_vertical_padding))
-        outer_hab_box_h = max(1, dynamic_hab_content_h + (vertical_margin * 2))
+        render_hab_vertical_padding = vertical_margin
+        use_visual_hab_content_height = True
+        outer_hab_box_h = max(1, visual_hab_content_h + (vertical_margin * 2))
         used_hab_box_y = max(0, hab_box_bottom - outer_hab_box_h)
         used_hab_box_h = max(1, hab_box_bottom - used_hab_box_y)
     elif is_libreria_bottom_anchor_margin:
         hab_box_bottom = habilidad_box['y']
         vertical_margin = max(0, int(habilidad_box['height']))
         render_hab_vertical_padding = vertical_margin
-        outer_hab_box_h = max(1, dynamic_hab_content_h + (vertical_margin * 2))
+        use_visual_hab_content_height = True
+        outer_hab_box_h = max(1, visual_hab_content_h + (vertical_margin * 2))
         used_hab_box_y = max(0, hab_box_bottom - outer_hab_box_h)
         used_hab_box_h = max(1, hab_box_bottom - used_hab_box_y)
     elif has_habilidad_box:
@@ -600,6 +706,7 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
             'used_box': used_hab_box,
             'height': used_hab_box['height'],
             'vertical_padding': max(0, int(render_hab_vertical_padding)),
+            'use_visual_content_height': bool(use_visual_hab_content_height),
             'source': 'box' if has_habilidad_box else 'legacy',
         },
         'disciplinas': {
@@ -916,11 +1023,10 @@ def _segment_to_tokens_libreria(segments, font_size):
 # --- Helper: renderiza texto con word-wrap y múltiples estilos ---
 def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_opacity=180,
                            bg_padding=10, vertical_padding=None, bg_radius=12, line_spacing=3,
-                           bg_color=(0, 0, 0), box_height=None):
+                           bg_color=(0, 0, 0), box_height=None, use_visual_content_height=False):
     """Renderiza el texto de habilidad con formato mixto, word-wrap y fondo redondeado."""
-    font_bold, font_normal = _load_hab_fonts(font_size)
-    segments = _parse_habilidad(text)
-    if not segments:
+    words = _build_habilidad_word_tokens(text, font_size)
+    if not words:
         return
 
     horizontal_pad = int(bg_padding)
@@ -932,52 +1038,19 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     content_y = outer_y + vertical_pad
     content_width = max(1, outer_width - (horizontal_pad * 2))
 
-    # --- Primer paso: calcular dimensiones del texto (dry run) ---
-    words = []
-    for seg in segments:
-        style = seg['style']
-        font = font_bold if style == 'bold' else font_normal
-        _append_text_tokens_with_inline_symbols(words, seg['text'], font, style, font_size)
-
     line_height = font_size + line_spacing
-    cur_x = content_x
-    cur_y = content_y
-    max_right = content_x
-    for word_info in words:
-        if word_info.get('type') == 'newline':
-            cur_x = content_x
-            cur_y += line_height
-            continue
-        if word_info.get('type') == 'symbol':
-            w_width = word_info['size'] + word_info['gap']
-            w_text = None
-            w_font = word_info['font']
-        else:
-            w_text = word_info['text']
-            w_font = word_info['font']
-            bbox = w_font.getbbox(w_text)
-            w_width = bbox[2] - bbox[0]
-        if cur_x + w_width > content_x + content_width and cur_x > content_x:
-            cur_x = content_x
-            cur_y += line_height
-            if w_text and w_text.startswith(' '):
-                w_text = w_text.lstrip(' ')
-                bbox = w_font.getbbox(w_text)
-                w_width = bbox[2] - bbox[0]
-        if cur_x + w_width > max_right:
-            max_right = cur_x + w_width
-        cur_x += w_width
-
-    text_bottom = cur_y + line_height
+    lines = _wrap_habilidad_word_tokens(words, content_width)
+    visual_top_offset, _, visual_content_height = _measure_habilidad_visual_block(lines, line_height, font_size)
 
     # --- Dibujar recuadro redondeado con transparencia ---
     rx, ry = outer_x, outer_y
     rw = outer_width
-    # Altura fija si se especifica box_height, dinámica si no
     if box_height is not None:
         rh = box_height
+    elif use_visual_content_height:
+        rh = max(1, visual_content_height + (vertical_pad * 2))
     else:
-        rh = max(1, (text_bottom - content_y) + (vertical_pad * 2))
+        rh = max(1, (max(1, len(lines)) * line_height) + (vertical_pad * 2))
     bg_opacity = max(0, min(255, int(bg_opacity)))
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
@@ -988,56 +1061,19 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     )
     image.alpha_composite(overlay)
 
-    # --- Segundo paso: construir líneas ---
-    text_width = content_width
-    lines = []
-    current_line = []
-    cur_x = content_x
-    for word_info in words:
-        if word_info.get('type') == 'newline':
-            lines.append(current_line)
-            current_line = []
-            cur_x = content_x
-            continue
-        w_font = word_info['font']
-        w_style = word_info['style']
-        if word_info.get('type') == 'symbol':
-            w_text = None
-            w_width = word_info['size'] + word_info['gap']
-        else:
-            w_text = word_info['text']
-            bbox = w_font.getbbox(w_text)
-            w_width = bbox[2] - bbox[0]
-        if cur_x + w_width > content_x + text_width and cur_x > content_x:
-            lines.append(current_line)
-            current_line = []
-            cur_x = content_x
-            if w_text and w_text.startswith(' '):
-                w_text = w_text.lstrip(' ')
-                bbox = w_font.getbbox(w_text)
-                w_width = bbox[2] - bbox[0]
-        if word_info.get('type') == 'symbol':
-            current_line.append({
-                'type': 'symbol',
-                'path': word_info['path'],
-                'size': word_info['size'],
-                'gap': word_info['gap'],
-                'style': w_style,
-                'font': w_font,
-            })
-        else:
-            current_line.append({'type': 'text', 'text': w_text, 'style': w_style, 'font': w_font})
-        cur_x += w_width
-    if current_line:
-        lines.append(current_line)
-
     # --- Tercer paso: dibujar líneas centradas (sin justificado a extremos) ---
     draw = ImageDraw.Draw(image)
-    content_height = max(1, len(lines)) * line_height
+    text_width = content_width
     if box_height is not None:
         inner_top = outer_y + vertical_pad
         inner_height = max(1, rh - (vertical_pad * 2))
-        cur_y = inner_top + max(0, (inner_height - content_height) // 2)
+        if use_visual_content_height:
+            cur_y = inner_top + max(0, (inner_height - visual_content_height) // 2) - visual_top_offset
+        else:
+            content_height = max(1, len(lines)) * line_height
+            cur_y = inner_top + max(0, (inner_height - content_height) // 2)
+    elif use_visual_content_height:
+        cur_y = content_y - visual_top_offset
     else:
         cur_y = content_y
     symbol_cache = {}
@@ -1327,6 +1363,7 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     hab_max_w     = int(hab_box.get('width', int(card_w * lh['max_width_ratio'])))
     hab_padding   = lh['bg_padding']
     hab_vertical_padding = int(hab_metrics.get('vertical_padding', hab_padding))
+    hab_use_visual_content = bool(hab_metrics.get('use_visual_content_height', False))
     hab_radius    = lh['bg_radius']
     hab_line_sp   = lh['line_spacing']
     hab_box_h     = int(hab_box.get('height')) if hab_box else (int(card_h * lh['box_bottom_ratio']) - hab_y if 'box_bottom_ratio' in lh else None)
@@ -1496,7 +1533,8 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
                 image, habilidad, hab_x, hab_y, hab_max_w, hab_font_size, lh['color'],
                 bg_opacity=hab_opacity, bg_padding=hab_padding, vertical_padding=hab_vertical_padding,
                 bg_radius=hab_radius, line_spacing=hab_line_sp,
-                bg_color=tuple(lh['bg_color']), box_height=hab_box_h
+                bg_color=tuple(lh['bg_color']), box_height=hab_box_h,
+                use_visual_content_height=hab_use_visual_content,
             )
         except Exception as e:
             print(f'Error renderizando habilidad: {e}')
