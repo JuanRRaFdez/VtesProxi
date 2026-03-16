@@ -164,6 +164,27 @@ class LayoutDesktopPackagingTests(SimpleTestCase):
         self.assertIn('windows_launcher.spec', build_ps1)
 
 
+class LayoutLocalUserBootstrapScriptTests(TestCase):
+    def test_bootstrap_local_user_creates_normal_user(self):
+        from scripts.bootstrap_local_user import bootstrap_local_user
+
+        result = bootstrap_local_user('compa', 'clave123')
+
+        self.assertTrue(result['created'])
+        user = get_user_model().objects.get(username='compa')
+        self.assertFalse(user.is_superuser)
+        self.assertFalse(user.is_staff)
+
+    def test_bootstrap_local_user_is_idempotent(self):
+        from scripts.bootstrap_local_user import bootstrap_local_user
+
+        bootstrap_local_user('compa', 'clave123')
+        result = bootstrap_local_user('compa', 'otra-clave')
+
+        self.assertFalse(result['created'])
+        self.assertEqual(get_user_model().objects.filter(username='compa').count(), 1)
+
+
 class LayoutEditorAccessTests(TestCase):
     def test_editor_requires_login(self):
         response = self.client.get('/layouts/')
