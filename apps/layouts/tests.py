@@ -40,13 +40,6 @@ class UserLayoutModelTests(TestCase):
 
     def test_only_one_default_per_user_and_card_type(self):
         user = get_user_model().objects.create_user(username='bob', password='secret')
-        UserLayout.objects.create(
-            user=user,
-            name='Default 1',
-            card_type='libreria',
-            config={},
-            is_default=True,
-        )
 
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
@@ -57,6 +50,29 @@ class UserLayoutModelTests(TestCase):
                     config={},
                     is_default=True,
                 )
+
+
+class LayoutUserBootstrapTests(TestCase):
+    def test_new_user_gets_default_classic_layouts_for_both_card_types(self):
+        user = get_user_model().objects.create_user(username='fresh', password='secret')
+
+        defaults = list(
+            UserLayout.objects.filter(user=user, is_default=True).order_by('card_type')
+        )
+
+        self.assertEqual(
+            [(layout.card_type, layout.name) for layout in defaults],
+            [('cripta', 'classic'), ('libreria', 'classic')],
+        )
+
+    def test_re_saving_user_does_not_duplicate_default_layouts(self):
+        user = get_user_model().objects.create_user(username='stable', password='secret')
+
+        user.first_name = 'Stable'
+        user.save()
+
+        self.assertEqual(UserLayout.objects.filter(user=user, card_type='cripta').count(), 1)
+        self.assertEqual(UserLayout.objects.filter(user=user, card_type='libreria').count(), 1)
 
 
 class LayoutEditorAccessTests(TestCase):
@@ -92,8 +108,10 @@ class LayoutApiListCreateTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(len(payload['layouts']), 1)
-        self.assertEqual(payload['layouts'][0]['id'], own_layout.id)
+        self.assertEqual({layout['id'] for layout in payload['layouts']}, {
+            own_layout.id,
+            UserLayout.objects.get(user=self.user, card_type='cripta', is_default=True).id,
+        })
 
     def test_create_builds_layout_from_classic_seed(self):
         self.client.force_login(self.user)
@@ -138,10 +156,10 @@ class LayoutApiListCreateTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()['layouts']
-        self.assertEqual(len(payload), 1)
-        self.assertEqual(payload[0]['id'], own_layout.id)
-        self.assertIn('box', payload[0]['config']['disciplinas'])
-        self.assertIn('box', payload[0]['config']['simbolos'])
+        own_payload = next(layout for layout in payload if layout['id'] == own_layout.id)
+        self.assertEqual(len(payload), 2)
+        self.assertIn('box', own_payload['config']['disciplinas'])
+        self.assertIn('box', own_payload['config']['simbolos'])
 
     def test_detail_rejects_other_user_layout(self):
         other_layout = UserLayout.objects.create(
@@ -416,11 +434,9 @@ class LayoutManagementApiTests(TestCase):
         self.assertFalse(UserLayout.objects.filter(id=self.layout.id).exists())
 
     def test_set_default_switches_previous_default_off(self):
-        previous_default = UserLayout.objects.create(
+        previous_default = UserLayout.objects.get(
             user=self.user,
-            name='Default actual',
             card_type='libreria',
-            config=load_classic_seed('libreria'),
             is_default=True,
         )
         next_default = UserLayout.objects.create(
