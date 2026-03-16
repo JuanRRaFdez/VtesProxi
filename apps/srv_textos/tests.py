@@ -525,6 +525,60 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
         self.assertTrue(any(path.endswith('static/disc_inf/dom.png') for path in symbol_paths))
         self.assertTrue(any(path.endswith('static/disc_sup/dom.png') for path in symbol_paths))
 
+    def test_render_habilidad_reserves_leading_column_for_discipline_prefixed_line(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+        fake_symbol = Image.new('RGBA', (24, 24), (255, 255, 255, 255))
+        words = srv_textos_views._build_habilidad_word_tokens('[aus] +1 intercept.', 28)
+        leading_symbol = words[0]
+        content_x = 80 + 10
+        expected_max_text_x = content_x + leading_symbol['size'] + leading_symbol['gap'] + 12
+
+        with patch('apps.srv_textos.views._load_symbol', return_value=fake_symbol), patch(
+            'apps.srv_textos.views.ImageDraw.ImageDraw.text', autospec=True
+        ) as mock_draw_text:
+            srv_textos_views._render_habilidad_text(
+                image=image,
+                text='[aus] +1 intercept.',
+                x=80,
+                y=100,
+                max_width=260,
+                font_size=28,
+                color='white',
+                bg_opacity=0,
+                bg_padding=10,
+                bg_radius=0,
+                line_spacing=3,
+                bg_color=(0, 0, 0),
+                box_height=100,
+            )
+
+        first_text_position = mock_draw_text.call_args_list[0].args[1]
+        self.assertLessEqual(first_text_position[0], expected_max_text_x)
+
+    def test_render_habilidad_keeps_regular_line_out_of_leading_discipline_column(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+        content_x = 80 + 10
+
+        with patch('apps.srv_textos.views.ImageDraw.ImageDraw.text', autospec=True) as mock_draw_text:
+            srv_textos_views._render_habilidad_text(
+                image=image,
+                text='Requires an Anarch.',
+                x=80,
+                y=100,
+                max_width=260,
+                font_size=28,
+                color='white',
+                bg_opacity=0,
+                bg_padding=10,
+                bg_radius=0,
+                line_spacing=3,
+                bg_color=(0, 0, 0),
+                box_height=100,
+            )
+
+        first_text_position = mock_draw_text.call_args_list[0].args[1]
+        self.assertLess(first_text_position[0], content_x + 20)
+
     def test_render_habilidad_uses_box_origin_as_outer_top_left(self):
         image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
 

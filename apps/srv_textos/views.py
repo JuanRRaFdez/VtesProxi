@@ -1105,7 +1105,10 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
                 else:
                     line_width += max(2, int(font_size * 0.1))
 
-        cur_x = content_x + max(0, (text_width - line_width) // 2)
+        if line and line[0].get('type') == 'symbol':
+            cur_x = content_x
+        else:
+            cur_x = content_x + max(0, (text_width - line_width) // 2)
         for i, winfo in enumerate(line):
             if token_is_symbol[i]:
                 cache_key = (winfo['path'], winfo['size'])
