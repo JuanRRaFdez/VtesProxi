@@ -1,5 +1,6 @@
 import importlib
 import os
+import tempfile
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -95,6 +96,46 @@ class LayoutDesktopSettingsTests(SimpleTestCase):
             Path('/tmp/webvtes-portable') / 'media',
         )
         self.assertEqual(desktop_settings.ALLOWED_HOSTS, ['127.0.0.1', 'localhost'])
+
+
+class LayoutDesktopRuntimeTests(SimpleTestCase):
+    def test_seed_copy_only_copies_db_and_media_when_missing(self):
+        from desktop.runtime import ensure_seeded_runtime
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            base_dir = Path(tmp_dir)
+            portable_dir = base_dir / 'portable'
+            seed_dir = base_dir / 'seed'
+            seed_media_dir = seed_dir / 'media'
+
+            seed_media_dir.mkdir(parents=True)
+            (seed_dir / 'db.sqlite3').write_bytes(b'seed-db')
+            (seed_media_dir / 'example.txt').write_text('seed-media', encoding='utf-8')
+
+            ensure_seeded_runtime(portable_dir, seed_dir)
+            self.assertEqual((portable_dir / 'db.sqlite3').read_bytes(), b'seed-db')
+            self.assertEqual(
+                (portable_dir / 'media' / 'example.txt').read_text(encoding='utf-8'),
+                'seed-media',
+            )
+
+            (portable_dir / 'db.sqlite3').write_bytes(b'user-db')
+            (portable_dir / 'media' / 'example.txt').write_text('user-media', encoding='utf-8')
+
+            ensure_seeded_runtime(portable_dir, seed_dir)
+            self.assertEqual((portable_dir / 'db.sqlite3').read_bytes(), b'user-db')
+            self.assertEqual(
+                (portable_dir / 'media' / 'example.txt').read_text(encoding='utf-8'),
+                'user-media',
+            )
+
+    def test_launcher_parses_supervisor_and_serve_modes(self):
+        from desktop.windows_launcher import parse_args
+
+        args = parse_args(['--serve', '--port', '8123'])
+
+        self.assertTrue(args.serve)
+        self.assertEqual(args.port, 8123)
 
 
 class LayoutEditorAccessTests(TestCase):
