@@ -496,7 +496,7 @@ def validate_layout_config(card_type, config):
 
         cripta = normalized['cripta']
         _expect_number(cripta, 'font_size', 8, 200)
-        _expect_number(cripta, 'y_gap', 0, 200)
+        _expect_number(cripta, 'y_gap', 0, 3000)
     else:
         simbolos = normalized['simbolos']
         _expect_number(simbolos, 'size', 8, 1000)

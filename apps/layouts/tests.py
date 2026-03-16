@@ -374,6 +374,12 @@ class LayoutConfigValidationV2Tests(TestCase):
 
         validate_layout_config('libreria', config)
 
+    def test_validate_accepts_large_cripta_y_gap_within_canvas_range(self):
+        config = normalize_layout_config('cripta', load_classic_seed('cripta'))
+        config['cripta']['y_gap'] = 420
+
+        validate_layout_config('cripta', config)
+
 
 class LayoutManagementApiTests(TestCase):
     def setUp(self):
