@@ -579,6 +579,33 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
         first_text_position = mock_draw_text.call_args_list[0].args[1]
         self.assertLess(first_text_position[0], content_x + 20)
 
+    def test_render_habilidad_wraps_discipline_line_with_hanging_indent(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+        fake_symbol = Image.new('RGBA', (24, 24), (255, 255, 255, 255))
+
+        with patch('apps.srv_textos.views._load_symbol', return_value=fake_symbol), patch(
+            'apps.srv_textos.views.ImageDraw.ImageDraw.text', autospec=True
+        ) as mock_draw_text:
+            srv_textos_views._render_habilidad_text(
+                image=image,
+                text='[aus] +1 intercept, even if intercept is not yet needed.',
+                x=80,
+                y=100,
+                max_width=260,
+                font_size=28,
+                color='white',
+                bg_opacity=0,
+                bg_padding=10,
+                bg_radius=0,
+                line_spacing=3,
+                bg_color=(0, 0, 0),
+                box_height=160,
+            )
+
+        first_line_x = mock_draw_text.call_args_list[0].args[1][0]
+        second_line_x = mock_draw_text.call_args_list[2].args[1][0]
+        self.assertLessEqual(abs(first_line_x - second_line_x), 5)
+
     def test_render_habilidad_uses_box_origin_as_outer_top_left(self):
         image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
 

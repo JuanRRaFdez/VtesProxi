@@ -252,10 +252,26 @@ def _build_habilidad_word_tokens(text, font_size):
     return words
 
 
+def _habilidad_token_width(token):
+    token_type = token.get('type')
+    if token_type == 'symbol':
+        return token['size'] + token['gap']
+    if token_type == 'indent':
+        return token['width']
+
+    bbox = token['font'].getbbox(token['text'])
+    return bbox[2] - bbox[0]
+
+
+def _leading_symbol_indent_width(token):
+    return _habilidad_token_width(token) + max(2, int(token['size'] * 0.1))
+
+
 def _wrap_habilidad_word_tokens(words, content_width):
     lines = []
     current_line = []
     current_width = 0
+    hanging_indent = 0
     content_width = max(1, int(content_width))
 
     for word_info in words:
@@ -263,27 +279,27 @@ def _wrap_habilidad_word_tokens(words, content_width):
             lines.append(current_line)
             current_line = []
             current_width = 0
+            hanging_indent = 0
             continue
 
         wrapped_word = dict(word_info)
-        if wrapped_word.get('type') == 'symbol':
-            word_width = wrapped_word['size'] + wrapped_word['gap']
-        else:
-            text = wrapped_word['text']
-            bbox = wrapped_word['font'].getbbox(text)
-            word_width = bbox[2] - bbox[0]
+        word_width = _habilidad_token_width(wrapped_word)
 
         if current_width + word_width > content_width and current_width > 0:
             lines.append(current_line)
             current_line = []
             current_width = 0
+            if hanging_indent > 0:
+                current_line.append({'type': 'indent', 'width': hanging_indent})
+                current_width = hanging_indent
             if wrapped_word.get('type') == 'text' and wrapped_word['text'].startswith(' '):
                 wrapped_word['text'] = wrapped_word['text'].lstrip(' ')
-                bbox = wrapped_word['font'].getbbox(wrapped_word['text'])
-                word_width = bbox[2] - bbox[0]
+                word_width = _habilidad_token_width(wrapped_word)
 
         current_line.append(wrapped_word)
         current_width += word_width
+        if len(current_line) == 1 and wrapped_word.get('type') == 'symbol':
+            hanging_indent = _leading_symbol_indent_width(wrapped_word)
 
     if current_line:
         lines.append(current_line)
@@ -299,7 +315,10 @@ def _measure_habilidad_visual_block(lines, line_height, font_size):
 
     for line in lines:
         for token in line:
-            if token.get('type') == 'symbol':
+            token_type = token.get('type')
+            if token_type == 'indent':
+                continue
+            if token_type == 'symbol':
                 token_top = cur_y + max(0, (line_height - token['size']) // 2) - icon_vertical_nudge
                 token_bottom = token_top + token['size']
             else:
@@ -1082,42 +1101,45 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
         # Calcular ancho de cada token
         stripped_words = []
         word_widths = []
-        token_is_symbol = []
+        token_types = []
         for winfo in line:
-            if winfo.get('type') == 'symbol':
+            token_type = winfo.get('type')
+            token_types.append(token_type)
+            if token_type == 'symbol':
                 stripped_words.append('')
-                word_widths.append(winfo['size'] + winfo['gap'])
-                token_is_symbol.append(True)
+                word_widths.append(_habilidad_token_width(winfo))
+            elif token_type == 'indent':
+                stripped_words.append('')
+                word_widths.append(_habilidad_token_width(winfo))
             else:
                 stripped = winfo['text'].lstrip(' ')
                 stripped_words.append(stripped)
                 bbox = winfo['font'].getbbox(stripped)
                 word_widths.append(bbox[2] - bbox[0])
-                token_is_symbol.append(False)
 
         line_width = sum(word_widths)
         num_words = len(line)
         if num_words > 1:
             for i, winfo in enumerate(line[:-1]):
-                if not token_is_symbol[i]:
+                if token_types[i] == 'text':
                     sp = winfo['font'].getbbox(' ')
                     line_width += sp[2] - sp[0]
-                else:
+                elif token_types[i] == 'symbol':
                     line_width += max(2, int(font_size * 0.1))
 
-        if line and line[0].get('type') == 'symbol':
+        if line and line[0].get('type') in {'symbol', 'indent'}:
             cur_x = content_x
         else:
             cur_x = content_x + max(0, (text_width - line_width) // 2)
         for i, winfo in enumerate(line):
-            if token_is_symbol[i]:
+            if token_types[i] == 'symbol':
                 cache_key = (winfo['path'], winfo['size'])
                 icon = symbol_cache.get(cache_key)
                 if icon is None:
                     icon = _load_symbol(winfo['path'], winfo['size'])
                     symbol_cache[cache_key] = icon
                 image.alpha_composite(icon, (int(cur_x), int(cur_y + max(0, (line_height - winfo['size']) // 2) - icon_vertical_nudge)))
-            else:
+            elif token_types[i] == 'text':
                 t = stripped_words[i]
                 if winfo['style'] == 'italic':
                     _draw_italic(image, int(cur_x), cur_y, t, winfo['font'], color, font_size)
@@ -1125,10 +1147,10 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
                     draw.text((int(cur_x), cur_y), t, font=winfo['font'], fill=color)
             cur_x += word_widths[i]
             if i < num_words - 1:
-                if not token_is_symbol[i]:
+                if token_types[i] == 'text':
                     sp = winfo['font'].getbbox(' ')
                     cur_x += sp[2] - sp[0]
-                else:
+                elif token_types[i] == 'symbol':
                     cur_x += max(2, int(font_size * 0.1))
         cur_y += line_height
 
