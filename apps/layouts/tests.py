@@ -596,6 +596,14 @@ class LayoutEditorStaticAssetTests(SimpleTestCase):
         self.assertIn('getHabilidadTop', script)
         self.assertNotIn("layerName === 'disciplinas' && state.cardType === 'cripta'", script)
 
+    def test_editor_script_clamps_cripta_y_gap_to_valid_range(self):
+        script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')
+
+        self.assertIn('const MAX_CRIPTA_Y_GAP = 3000', script)
+        self.assertIn('function clampCriptaYGap(yGap)', script)
+        self.assertIn('clampCriptaYGap(Number(section.y_gap || 1))', script)
+        self.assertIn('section.y_gap = clampCriptaYGap(', script)
+
 
 class EndToEndLayoutFlowTests(TestCase):
     def test_user_can_create_edit_set_default_and_render_with_layout(self):

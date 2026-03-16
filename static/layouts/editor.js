@@ -38,6 +38,7 @@
         config: null,
         scale: 1,
     };
+    const MAX_CRIPTA_Y_GAP = 3000;
 
     const layerOrder = ['nombre', 'clan', 'senda', 'disciplinas', 'simbolos', 'habilidad', 'coste', 'cripta', 'ilustrador'];
     const textRuleLayers = ['nombre', 'ilustrador'];
@@ -55,6 +56,10 @@
 
     function profileForLayer(layerName) {
         return layerProfiles[layerName] || { invisible: true, resizable: true };
+    }
+
+    function clampCriptaYGap(yGap) {
+        return Math.max(0, Math.min(MAX_CRIPTA_Y_GAP, Math.round(Number(yGap || 0))));
     }
 
     function setStatus(message, type) {
@@ -431,7 +436,8 @@
             height = 60;
             const hab = state.config.habilidad || {};
             const habY = hab.y_ratio != null ? Math.round(cardHeight * Number(hab.y_ratio || 0.8)) : 820;
-            y = habY - Number(section.font_size || 35) - Number(section.y_gap || 1);
+            const clampedYGap = clampCriptaYGap(Number(section.y_gap || 1));
+            y = habY - Number(section.font_size || 35) - clampedYGap;
         } else if (layerName === 'ilustrador') {
             width = 210;
             y = cardHeight - Number(section.bottom || 20) - height;
@@ -517,7 +523,7 @@
             const hab = state.config.habilidad || {};
             const habY = hab.y_ratio != null ? Math.round(cardHeight * Number(hab.y_ratio || 0.8)) : 820;
             const currentFontSize = Math.max(8, Math.round(Number(section.font_size || 35)));
-            section.y_gap = Math.max(0, Math.round(habY - normalizedFrame.y - currentFontSize));
+            section.y_gap = clampCriptaYGap(habY - normalizedFrame.y - currentFontSize);
         } else if (layerName === 'ilustrador') {
             section.bottom = Math.max(0, Math.round(cardHeight - normalizedFrame.y - normalizedFrame.height));
         }
