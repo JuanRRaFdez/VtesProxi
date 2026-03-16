@@ -185,6 +185,37 @@ class LayoutLocalUserBootstrapScriptTests(TestCase):
         self.assertEqual(get_user_model().objects.filter(username='compa').count(), 1)
 
 
+class LayoutWindowsGitBootstrapScriptTests(SimpleTestCase):
+    def test_clone_and_run_script_uses_localappdata_install_dir(self):
+        script = Path(
+            settings.BASE_DIR,
+            'scripts',
+            'windows',
+            'clone_and_run.ps1',
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('$env:LOCALAPPDATA', script)
+        self.assertIn('WebVTES', script)
+
+    def test_clone_and_run_script_clones_repo_and_bootstraps_user(self):
+        script = Path(
+            settings.BASE_DIR,
+            'scripts',
+            'windows',
+            'clone_and_run.ps1',
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('git clone', script)
+        self.assertIn('bootstrap_local_user.py', script)
+        self.assertNotIn('git pull', script)
+
+    def test_batch_launcher_delegates_to_clone_and_run_powershell_script(self):
+        launcher = Path(settings.BASE_DIR, 'run_windows_clone.bat').read_text(encoding='utf-8')
+
+        self.assertIn('clone_and_run.ps1', launcher)
+        self.assertIn('powershell', launcher.lower())
+
+
 class LayoutEditorAccessTests(TestCase):
     def test_editor_requires_login(self):
         response = self.client.get('/layouts/')
