@@ -28,6 +28,10 @@ media/cartas/*
 # Estáticos compilados
 staticfiles/
 static_collected/
+build/
+dist/
+desktop/seed/media/*
+!desktop/seed/README.md
 
 # IDEs
 .vscode/

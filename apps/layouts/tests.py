@@ -138,6 +138,32 @@ class LayoutDesktopRuntimeTests(SimpleTestCase):
         self.assertEqual(args.port, 8123)
 
 
+class LayoutDesktopPackagingTests(SimpleTestCase):
+    def test_windows_spec_references_required_seed_resources(self):
+        spec = Path(settings.BASE_DIR, 'desktop', 'windows_launcher.spec').read_text(encoding='utf-8')
+
+        self.assertIn('db.sqlite3', spec)
+        self.assertIn('media', spec)
+        self.assertIn('desktop/windows_launcher.py', spec)
+
+    def test_windows_build_scripts_reference_pyinstaller_spec(self):
+        build_bat = Path(
+            settings.BASE_DIR,
+            'scripts',
+            'windows',
+            'build_windows_bundle.bat',
+        ).read_text(encoding='utf-8')
+        build_ps1 = Path(
+            settings.BASE_DIR,
+            'scripts',
+            'windows',
+            'build_windows_bundle.ps1',
+        ).read_text(encoding='utf-8')
+
+        self.assertIn('windows_launcher.spec', build_bat)
+        self.assertIn('windows_launcher.spec', build_ps1)
+
+
 class LayoutEditorAccessTests(TestCase):
     def test_editor_requires_login(self):
         response = self.client.get('/layouts/')
