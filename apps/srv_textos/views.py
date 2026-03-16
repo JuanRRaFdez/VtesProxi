@@ -470,6 +470,7 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         and raw_libreria_box_semantics in {None, 'legacy'}
     )
     effective_hab_font_size = layout_hab_font_size
+    render_hab_vertical_padding = hab_vertical_padding
     if (is_dynamic_bottom_anchor or is_libreria_bottom_anchor_margin or is_libreria_legacy_visual_box) and hab_font_size is not None:
         effective_hab_font_size = max(20, min(int(hab_font_size), 80))
 
@@ -497,6 +498,7 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
     elif is_libreria_bottom_anchor_margin:
         hab_box_bottom = habilidad_box['y']
         vertical_margin = max(0, int(habilidad_box['height']))
+        render_hab_vertical_padding = vertical_margin
         outer_hab_box_h = max(1, dynamic_hab_content_h + (vertical_margin * 2))
         used_hab_box_y = max(0, hab_box_bottom - outer_hab_box_h)
         used_hab_box_h = max(1, hab_box_bottom - used_hab_box_y)
@@ -597,6 +599,7 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
             'box': habilidad_box,
             'used_box': used_hab_box,
             'height': used_hab_box['height'],
+            'vertical_padding': max(0, int(render_hab_vertical_padding)),
             'source': 'box' if has_habilidad_box else 'legacy',
         },
         'disciplinas': {
@@ -912,21 +915,22 @@ def _segment_to_tokens_libreria(segments, font_size):
 
 # --- Helper: renderiza texto con word-wrap y múltiples estilos ---
 def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_opacity=180,
-                           bg_padding=10, bg_radius=12, line_spacing=3, bg_color=(0, 0, 0),
-                           box_height=None):
+                           bg_padding=10, vertical_padding=None, bg_radius=12, line_spacing=3,
+                           bg_color=(0, 0, 0), box_height=None):
     """Renderiza el texto de habilidad con formato mixto, word-wrap y fondo redondeado."""
     font_bold, font_normal = _load_hab_fonts(font_size)
     segments = _parse_habilidad(text)
     if not segments:
         return
 
-    pad = int(bg_padding)
+    horizontal_pad = int(bg_padding)
+    vertical_pad = int(bg_padding if vertical_padding is None else vertical_padding)
     outer_x = int(x)
     outer_y = int(y)
     outer_width = max(1, int(max_width))
-    content_x = outer_x + pad
-    content_y = outer_y + pad
-    content_width = max(1, outer_width - (pad * 2))
+    content_x = outer_x + horizontal_pad
+    content_y = outer_y + vertical_pad
+    content_width = max(1, outer_width - (horizontal_pad * 2))
 
     # --- Primer paso: calcular dimensiones del texto (dry run) ---
     words = []
@@ -973,7 +977,7 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     if box_height is not None:
         rh = box_height
     else:
-        rh = max(1, (text_bottom - content_y) + (pad * 2))
+        rh = max(1, (text_bottom - content_y) + (vertical_pad * 2))
     bg_opacity = max(0, min(255, int(bg_opacity)))
     overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
@@ -1031,8 +1035,8 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     draw = ImageDraw.Draw(image)
     content_height = max(1, len(lines)) * line_height
     if box_height is not None:
-        inner_top = outer_y + pad
-        inner_height = max(1, rh - (pad * 2))
+        inner_top = outer_y + vertical_pad
+        inner_height = max(1, rh - (vertical_pad * 2))
         cur_y = inner_top + max(0, (inner_height - content_height) // 2)
     else:
         cur_y = content_y
@@ -1322,6 +1326,7 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
     hab_y         = int(hab_box.get('y', int(card_h * lh['y_ratio'])))
     hab_max_w     = int(hab_box.get('width', int(card_w * lh['max_width_ratio'])))
     hab_padding   = lh['bg_padding']
+    hab_vertical_padding = int(hab_metrics.get('vertical_padding', hab_padding))
     hab_radius    = lh['bg_radius']
     hab_line_sp   = lh['line_spacing']
     hab_box_h     = int(hab_box.get('height')) if hab_box else (int(card_h * lh['box_bottom_ratio']) - hab_y if 'box_bottom_ratio' in lh else None)
@@ -1489,7 +1494,7 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
         try:
             _render_habilidad_text(
                 image, habilidad, hab_x, hab_y, hab_max_w, hab_font_size, lh['color'],
-                bg_opacity=hab_opacity, bg_padding=hab_padding,
+                bg_opacity=hab_opacity, bg_padding=hab_padding, vertical_padding=hab_vertical_padding,
                 bg_radius=hab_radius, line_spacing=hab_line_sp,
                 bg_color=tuple(lh['bg_color']), box_height=hab_box_h
             )

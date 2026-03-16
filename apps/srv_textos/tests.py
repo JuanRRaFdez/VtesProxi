@@ -328,6 +328,7 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
         self.assertEqual(hab_max_w, 420)
         self.assertLess(hab_y, 820)
         self.assertEqual(hab_y + mock_render.call_args.kwargs['box_height'], 820)
+        self.assertEqual(mock_render.call_args.kwargs['vertical_padding'], 24)
 
     @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
     def test_render_habilidad_libreria_bottom_anchor_margin_grows_with_effective_font_size(self):
@@ -620,6 +621,30 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
 
         self.assertLessEqual(abs(top_gap - bottom_gap), 20)
 
+    def test_render_habilidad_can_use_vertical_padding_independent_from_bg_padding(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+
+        with patch('PIL.ImageDraw.ImageDraw.text', autospec=True) as mock_text:
+            srv_textos_views._render_habilidad_text(
+                image=image,
+                text='Texto de prueba',
+                x=90,
+                y=110,
+                max_width=190,
+                font_size=26,
+                color='white',
+                bg_opacity=0,
+                bg_padding=19,
+                vertical_padding=4,
+                bg_radius=0,
+                line_spacing=3,
+                bg_color=(0, 0, 0),
+                box_height=37,
+            )
+
+        draw_position = mock_text.call_args_list[0].args[1]
+        self.assertEqual(draw_position[1], 114)
+
 
 class NameIllustratorBoxRenderTests(TestCase):
     def test_nombre_uses_box_alignment_and_shadow_toggle(self):
@@ -884,6 +909,37 @@ class HabilidadDynamicHeightTests(SimpleTestCase):
         content_height = dynamic_height - (19 * 2)
 
         self.assertEqual(metrics['habilidad']['used_box']['height'], content_height + (26 * 2))
+
+    def test_libreria_habilidad_bottom_anchor_margin_uses_box_height_as_only_vertical_margin(self):
+        config = normalize_layout_config('libreria', load_classic_seed('libreria'))
+        config['habilidad']['rules']['box_semantics'] = 'bottom_anchor_margin'
+        config['habilidad']['font_size'] = 32
+        config['habilidad']['line_spacing'] = 4
+        config['habilidad']['bg_padding'] = 19
+        config['habilidad']['box'] = {
+            'x': 170,
+            'y': 820,
+            'width': 420,
+            'height': 4,
+        }
+        habilidad = 'Texto de prueba de varias lineas para medir que el aire vertical dependa solo de box.height.'
+
+        metrics = srv_textos_views._compute_layout_metrics(
+            config,
+            'libreria',
+            habilidad,
+        )
+
+        dynamic_height = srv_textos_views._compute_habilidad_dynamic_height(
+            habilidad=habilidad,
+            font_size=32,
+            max_width=420,
+            line_spacing=4,
+            padding=19,
+        )
+        content_height = dynamic_height - (19 * 2)
+
+        self.assertEqual(metrics['habilidad']['used_box']['height'], content_height + (4 * 2))
 
     def test_libreria_habilidad_bottom_anchor_margin_grows_with_effective_font_size(self):
         config = normalize_layout_config('libreria', load_classic_seed('libreria'))
