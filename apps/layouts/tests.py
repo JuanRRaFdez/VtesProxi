@@ -615,6 +615,13 @@ class LayoutEditorStaticAssetTests(SimpleTestCase):
         self.assertIn("x: clampedFrame.x", script)
         self.assertIn("y: clampedFrame.y", script)
 
+    def test_editor_script_prevents_negative_habilidad_box_y_from_properties_panel(self):
+        script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')
+
+        self.assertIn("layerName === 'habilidad'", script)
+        self.assertIn('section.box = {', script)
+        self.assertIn('y: clampedFrame.y', script)
+
 
 class EndToEndLayoutFlowTests(TestCase):
     def test_user_can_create_edit_set_default_and_render_with_layout(self):
