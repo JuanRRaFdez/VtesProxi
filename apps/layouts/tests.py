@@ -1,3 +1,5 @@
+import importlib
+import os
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -73,6 +75,26 @@ class LayoutUserBootstrapTests(TestCase):
 
         self.assertEqual(UserLayout.objects.filter(user=user, card_type='cripta').count(), 1)
         self.assertEqual(UserLayout.objects.filter(user=user, card_type='libreria').count(), 1)
+
+
+class LayoutDesktopSettingsTests(SimpleTestCase):
+    def _load_desktop_settings(self, portable_dir):
+        with patch.dict(os.environ, {'WEBVTES_PORTABLE_DIR': portable_dir}, clear=False):
+            import webvtes.settings_desktop as desktop_settings
+            return importlib.reload(desktop_settings)
+
+    def test_desktop_settings_use_portable_database_and_media_paths(self):
+        desktop_settings = self._load_desktop_settings('/tmp/webvtes-portable')
+
+        self.assertEqual(
+            Path(desktop_settings.DATABASES['default']['NAME']),
+            Path('/tmp/webvtes-portable') / 'db.sqlite3',
+        )
+        self.assertEqual(
+            Path(desktop_settings.MEDIA_ROOT),
+            Path('/tmp/webvtes-portable') / 'media',
+        )
+        self.assertEqual(desktop_settings.ALLOWED_HOSTS, ['127.0.0.1', 'localhost'])
 
 
 class LayoutEditorAccessTests(TestCase):
