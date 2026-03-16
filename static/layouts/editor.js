@@ -455,6 +455,12 @@
         const cardWidth = Number(carta.width || 745);
         const cardHeight = Number(carta.height || 1040);
         const normalizedFrame = normalizeFrameForLayer(layerName, frame);
+        const clampedFrame = {
+            x: Math.max(0, Math.round(normalizedFrame.x)),
+            y: Math.max(0, Math.round(normalizedFrame.y)),
+            width: Math.max(30, Math.round(normalizedFrame.width)),
+            height: Math.max(30, Math.round(normalizedFrame.height)),
+        };
         const profile = profileForLayer(layerName);
         ensureSectionRules(layerName, section);
         if (layerName === 'disciplinas') {
@@ -493,13 +499,13 @@
             section.max_width_ratio = Math.max(0, Math.min(1, normalizedFrame.width / cardWidth));
             return;
         }
-        section.x = Math.round(normalizedFrame.x);
-        section.y = Math.round(normalizedFrame.y);
+        section.x = clampedFrame.x;
+        section.y = clampedFrame.y;
         section.box = {
-            x: Math.round(normalizedFrame.x),
-            y: Math.round(normalizedFrame.y),
-            width: Math.max(30, Math.round(normalizedFrame.width)),
-            height: Math.max(30, Math.round(normalizedFrame.height)),
+            x: clampedFrame.x,
+            y: clampedFrame.y,
+            width: clampedFrame.width,
+            height: clampedFrame.height,
         };
 
         if (layerName === 'nombre') {

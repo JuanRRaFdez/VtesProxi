@@ -604,6 +604,17 @@ class LayoutEditorStaticAssetTests(SimpleTestCase):
         self.assertIn('clampCriptaYGap(Number(section.y_gap || 1))', script)
         self.assertIn('section.y_gap = clampCriptaYGap(', script)
 
+    def test_editor_script_clamps_common_frame_coordinates_before_persisting_box(self):
+        script = Path(settings.BASE_DIR, 'static', 'layouts', 'editor.js').read_text(encoding='utf-8')
+
+        self.assertIn('const clampedFrame = {', script)
+        self.assertIn('x: Math.max(0, Math.round(normalizedFrame.x))', script)
+        self.assertIn('y: Math.max(0, Math.round(normalizedFrame.y))', script)
+        self.assertIn('section.x = clampedFrame.x', script)
+        self.assertIn('section.y = clampedFrame.y', script)
+        self.assertIn("x: clampedFrame.x", script)
+        self.assertIn("y: clampedFrame.y", script)
+
 
 class EndToEndLayoutFlowTests(TestCase):
     def test_user_can_create_edit_set_default_and_render_with_layout(self):
