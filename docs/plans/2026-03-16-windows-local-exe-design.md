@@ -90,6 +90,15 @@ Se añadirán:
   - `db.sqlite3`
   - `media/`
 
+Archivos concretos del repo:
+
+- `desktop/windows_launcher.py`
+- `desktop/runtime.py`
+- `desktop/windows_launcher.spec`
+- `scripts/windows/build_windows_bundle.ps1`
+- `scripts/windows/build_windows_bundle.bat`
+- `desktop/seed/README.md`
+
 ## Testing
 
 La cobertura debe fijar tres áreas:

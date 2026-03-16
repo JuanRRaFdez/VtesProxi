@@ -132,11 +132,9 @@ class LayoutResolverPriorityTests(TestCase):
         self.other_user = user_model.objects.create_user(username='resolver-other', password='secret')
 
     def test_render_uses_layout_override_first(self):
-        selected_layout = UserLayout.objects.create(
+        selected_layout = UserLayout.objects.get(
             user=self.user,
-            name='Seleccionado',
             card_type='cripta',
-            config=load_classic_seed('cripta'),
             is_default=True,
         )
         override = deepcopy(load_classic_seed('cripta'))
@@ -157,13 +155,9 @@ class LayoutResolverPriorityTests(TestCase):
         selected_layout = load_classic_seed('cripta')
         selected_layout['carta']['width'] = 950
 
-        UserLayout.objects.create(
-            user=self.user,
-            name='Default',
-            card_type='cripta',
-            config=default_layout,
-            is_default=True,
-        )
+        default = UserLayout.objects.get(user=self.user, card_type='cripta', is_default=True)
+        default.config = default_layout
+        default.save(update_fields=['config'])
         selected = UserLayout.objects.create(
             user=self.user,
             name='Seleccionado',
@@ -203,11 +197,9 @@ class ImportViewsLayoutContextTests(TestCase):
         self.user = user_model.objects.create_user(username='import-user', password='secret')
         self.other_user = user_model.objects.create_user(username='import-other', password='secret')
 
-        self.cripta_default = UserLayout.objects.create(
+        self.cripta_default = UserLayout.objects.get(
             user=self.user,
-            name='Cripta default',
             card_type='cripta',
-            config=load_classic_seed('cripta'),
             is_default=True,
         )
         self.cripta_alt = UserLayout.objects.create(
@@ -217,18 +209,9 @@ class ImportViewsLayoutContextTests(TestCase):
             config=load_classic_seed('cripta'),
             is_default=False,
         )
-        self.libreria_default = UserLayout.objects.create(
+        self.libreria_default = UserLayout.objects.get(
             user=self.user,
-            name='Libreria default',
             card_type='libreria',
-            config=load_classic_seed('libreria'),
-            is_default=True,
-        )
-        UserLayout.objects.create(
-            user=self.other_user,
-            name='Ajeno',
-            card_type='cripta',
-            config=load_classic_seed('cripta'),
             is_default=True,
         )
 
