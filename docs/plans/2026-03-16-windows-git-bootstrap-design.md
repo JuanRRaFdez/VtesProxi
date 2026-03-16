@@ -76,6 +76,12 @@ La solución debería quedar repartida así:
 - `README.md`
 - tests en `apps/layouts/tests.py` o donde mejor encaje el contrato de los scripts
 
+## Repo Source
+
+El lanzador usará el repo público:
+
+- `https://github.com/JuanRRaFdez/VtesProxi.git`
+
 ## Testing
 
 La cobertura debe fijar:

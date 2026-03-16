@@ -111,3 +111,37 @@ Ese script:
 - ejecuta PyInstaller con `desktop/windows_launcher.spec`
 
 El resultado esperado es una carpeta en `dist/` lista para entregar a tu compañero.
+
+## Windows Clone-And-Run
+
+Si prefieres no pasar un bundle, también puedes pasar un único archivo Windows que clone el repo público y arranque la app localmente.
+
+### Archivo de entrada
+- `run_windows_clone.bat`
+
+### Qué hace
+- clona el repo en `%LOCALAPPDATA%\WebVTES\repo` si no existe
+- crea `.venv`
+- instala dependencias
+- corre migraciones con `webvtes.settings_desktop`
+- si no hay usuarios, pide `nombre` y `clave`
+- crea un usuario normal inicial
+- arranca la app local
+- abre el navegador
+
+### Comportamiento posterior
+- no hace `git pull` automáticamente
+- reutiliza la instalación local existente
+- no vuelve a crear usuarios si ya existe alguno
+
+### Archivos relacionados
+- lanzador único: `run_windows_clone.bat`
+- script principal: `scripts/windows/clone_and_run.ps1`
+- helper de alta inicial: `scripts/bootstrap_local_user.py`
+
+### Nota
+Este flujo requiere que la máquina Windows tenga:
+- `git`
+- `py` o Python para Windows en PATH
+
+Los layouts `classic` de `cripta` y `libreria` se crean automáticamente para el usuario nuevo gracias al bootstrap de layouts de la aplicación.
