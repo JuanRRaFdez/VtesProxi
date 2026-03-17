@@ -435,6 +435,19 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
         self.assertEqual(srv_textos_views._discipline_ref_to_code('DOM'), ('dom', True))
         self.assertEqual(srv_textos_views._discipline_ref_to_code('superior Dominate'), ('dom', True))
 
+    def test_inline_symbol_path_resolves_exact_directed_token(self):
+        path = srv_textos_views._inline_symbol_path('(D)')
+
+        self.assertIsNotNone(path)
+        self.assertTrue(
+            path.endswith('static/icons/directed.png') or path.endswith('static/icons/directed.svg')
+        )
+
+    def test_inline_symbol_path_keeps_other_parentheses_as_text(self):
+        path = srv_textos_views._inline_symbol_path('(rapida)')
+
+        self.assertIsNone(path)
+
     def test_segment_to_tokens_libreria_resolves_inline_discipline_symbols(self):
         tokens = srv_textos_views._segment_to_tokens_libreria(
             [{'text': 'Gana [dom] y [DOM].', 'style': 'normal'}],
@@ -507,6 +520,54 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
         symbol_paths = [call.args[0] for call in mock_load_symbol.call_args_list]
         self.assertTrue(any(path.endswith('static/disc_inf/dom.png') for path in symbol_paths))
         self.assertTrue(any(path.endswith('static/disc_sup/dom.png') for path in symbol_paths))
+
+    def test_render_habilidad_cripta_loads_directed_symbol_for_exact_directed_token(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+        fake_symbol = Image.new('RGBA', (24, 24), (255, 255, 255, 255))
+
+        with patch('apps.srv_textos.views._load_symbol', return_value=fake_symbol) as mock_load_symbol:
+            srv_textos_views._render_habilidad_text(
+                image=image,
+                text='Accion: esto es una (D) action.',
+                x=100,
+                y=120,
+                max_width=220,
+                font_size=28,
+                color='white',
+                bg_opacity=0,
+                bg_padding=12,
+                bg_radius=0,
+                line_spacing=3,
+                bg_color=(0, 0, 0),
+                box_height=140,
+            )
+
+        symbol_paths = [call.args[0] for call in mock_load_symbol.call_args_list]
+        self.assertTrue(any(path.endswith('static/icons/directed.png') for path in symbol_paths))
+
+    def test_render_habilidad_libreria_loads_directed_symbol_for_exact_directed_token(self):
+        image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
+        fake_symbol = Image.new('RGBA', (24, 24), (255, 255, 255, 255))
+
+        with patch('apps.srv_textos.views._load_symbol', return_value=fake_symbol) as mock_load_symbol:
+            srv_textos_views._render_habilidad_text(
+                image=image,
+                text='**Accion** (D) ahora',
+                x=90,
+                y=110,
+                max_width=220,
+                font_size=26,
+                color='white',
+                bg_opacity=0,
+                bg_padding=10,
+                bg_radius=0,
+                line_spacing=3,
+                bg_color=(0, 0, 0),
+                box_height=130,
+            )
+
+        symbol_paths = [call.args[0] for call in mock_load_symbol.call_args_list]
+        self.assertTrue(any(path.endswith('static/icons/directed.png') for path in symbol_paths))
 
     def test_render_habilidad_reserves_leading_column_for_discipline_prefixed_line(self):
         image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))

@@ -937,6 +937,8 @@ def _special_symbol_path(symbol):
 
 def _inline_symbol_path(symbol):
     raw = (symbol or '').strip()
+    if raw == '(D)':
+        return _special_symbol_path('Ⓓ')
     if raw.startswith('[') and raw.endswith(']'):
         code, is_superior = _discipline_ref_to_code(raw[1:-1])
         if code:
