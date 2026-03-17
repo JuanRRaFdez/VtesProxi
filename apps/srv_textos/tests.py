@@ -650,6 +650,66 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
         second_line_x = mock_draw_text.call_args_list[2].args[1][0]
         self.assertLessEqual(abs(first_line_x - second_line_x), 5)
 
+    def test_wrap_habilidad_libreria_uses_compound_leading_discipline_block_indent(self):
+        words = srv_textos_views._build_habilidad_word_tokens(
+            '[obl] or [tha] During your unlock phase, this ally burns 1 life.',
+            28,
+        )
+
+        lines = srv_textos_views._wrap_habilidad_word_tokens(words, 190, card_type='libreria')
+
+        self.assertGreaterEqual(len(lines), 2)
+        self.assertEqual(lines[1][0]['type'], 'indent')
+        self.assertGreater(
+            lines[1][0]['width'],
+            srv_textos_views._leading_symbol_indent_width(words[0]) + 20,
+        )
+
+    def test_wrap_habilidad_libreria_uses_two_leading_disciplines_without_or_as_block(self):
+        words = srv_textos_views._build_habilidad_word_tokens(
+            '[obl][tha] During your unlock phase, this ally burns 1 life.',
+            28,
+        )
+
+        lines = srv_textos_views._wrap_habilidad_word_tokens(words, 190, card_type='libreria')
+
+        self.assertGreaterEqual(len(lines), 2)
+        self.assertEqual(lines[1][0]['type'], 'indent')
+        self.assertGreater(
+            lines[1][0]['width'],
+            srv_textos_views._leading_symbol_indent_width(words[0]) + 20,
+        )
+
+    def test_wrap_habilidad_libreria_ignores_uppercase_or_connector(self):
+        words = srv_textos_views._build_habilidad_word_tokens(
+            '[obl] OR [tha] During your unlock phase, this ally burns 1 life.',
+            28,
+        )
+
+        lines = srv_textos_views._wrap_habilidad_word_tokens(words, 190, card_type='libreria')
+
+        self.assertGreaterEqual(len(lines), 2)
+        self.assertEqual(lines[1][0]['type'], 'indent')
+        self.assertEqual(
+            lines[1][0]['width'],
+            srv_textos_views._leading_symbol_indent_width(words[0]),
+        )
+
+    def test_wrap_habilidad_cripta_keeps_single_symbol_indent_for_compound_prefix(self):
+        words = srv_textos_views._build_habilidad_word_tokens(
+            '[obl] or [tha] During your unlock phase, this ally burns 1 life.',
+            28,
+        )
+
+        lines = srv_textos_views._wrap_habilidad_word_tokens(words, 190, card_type='cripta')
+
+        self.assertGreaterEqual(len(lines), 2)
+        self.assertEqual(lines[1][0]['type'], 'indent')
+        self.assertEqual(
+            lines[1][0]['width'],
+            srv_textos_views._leading_symbol_indent_width(words[0]),
+        )
+
     def test_render_habilidad_uses_box_origin_as_outer_top_left(self):
         image = Image.new('RGBA', (420, 420), (0, 0, 0, 0))
 

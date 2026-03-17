@@ -267,7 +267,111 @@ def _leading_symbol_indent_width(token):
     return _habilidad_token_width(token) + max(2, int(token['size'] * 0.1))
 
 
-def _wrap_habilidad_word_tokens(words, content_width):
+def _is_discipline_symbol_token(token):
+    if token.get('type') != 'symbol':
+        return False
+    normalized_path = str(token.get('path', '')).replace('\\', '/')
+    return '/disc_inf/' in normalized_path or '/disc_sup/' in normalized_path
+
+
+def _is_whitespace_text_token(token):
+    return token.get('type') == 'text' and not str(token.get('text', '')).strip()
+
+
+def _is_lowercase_or_connector_token(token):
+    return token.get('type') == 'text' and str(token.get('text', '')).strip() == 'or'
+
+
+def _rendered_text_token_width(token):
+    rendered = str(token.get('text', '')).lstrip(' ')
+    if not rendered:
+        return 0
+    bbox = token['font'].getbbox(rendered)
+    return bbox[2] - bbox[0]
+
+
+def _rendered_line_token_width(token):
+    token_type = token.get('type')
+    if token_type == 'symbol':
+        return _habilidad_token_width(token)
+    if token_type == 'indent':
+        return token.get('width', 0)
+    return _rendered_text_token_width(token)
+
+
+def _rendered_line_token_gap_after(token):
+    token_type = token.get('type')
+    if token_type == 'symbol':
+        return max(2, int(token['size'] * 0.1))
+    if token_type == 'text':
+        space_bbox = token['font'].getbbox(' ')
+        return space_bbox[2] - space_bbox[0]
+    return 0
+
+
+def _leading_libreria_discipline_block_end(line):
+    if not line or not _is_discipline_symbol_token(line[0]):
+        return 0
+
+    idx = 1
+    consumed = 1
+    symbol_count = 1
+
+    while idx < len(line):
+        token = line[idx]
+
+        if _is_whitespace_text_token(token):
+            consumed = idx + 1
+            idx += 1
+            continue
+
+        if _is_discipline_symbol_token(token):
+            symbol_count += 1
+            consumed = idx + 1
+            idx += 1
+            continue
+
+        if _is_lowercase_or_connector_token(token):
+            lookahead = idx + 1
+            while lookahead < len(line) and _is_whitespace_text_token(line[lookahead]):
+                lookahead += 1
+            if lookahead < len(line) and _is_discipline_symbol_token(line[lookahead]):
+                consumed = idx + 1
+                idx += 1
+                continue
+
+        break
+
+    if symbol_count >= 2:
+        return consumed
+    return 0
+
+
+def _token_sequence_indent_width(tokens):
+    width = 0
+    for token in tokens:
+        width += _rendered_line_token_width(token)
+        width += _rendered_line_token_gap_after(token)
+    return width
+
+
+def _leading_habilidad_indent_width(line, card_type=None):
+    if not line:
+        return 0
+
+    first_token = line[0]
+    if first_token.get('type') != 'symbol':
+        return 0
+
+    if _normalize_card_type(card_type) == 'libreria':
+        compound_end = _leading_libreria_discipline_block_end(line)
+        if compound_end > 0:
+            return _token_sequence_indent_width(line[:compound_end])
+
+    return _leading_symbol_indent_width(first_token)
+
+
+def _wrap_habilidad_word_tokens(words, content_width, card_type=None):
     lines = []
     current_line = []
     current_width = 0
@@ -298,8 +402,8 @@ def _wrap_habilidad_word_tokens(words, content_width):
 
         current_line.append(wrapped_word)
         current_width += word_width
-        if len(current_line) == 1 and wrapped_word.get('type') == 'symbol':
-            hanging_indent = _leading_symbol_indent_width(wrapped_word)
+        if current_line and current_line[0].get('type') != 'indent':
+            hanging_indent = _leading_habilidad_indent_width(current_line, card_type=card_type)
 
     if current_line:
         lines.append(current_line)
@@ -340,14 +444,14 @@ def _measure_habilidad_visual_block(lines, line_height, font_size):
     return int(visual_top), int(visual_bottom), max(1, int(visual_bottom - visual_top))
 
 
-def _compute_habilidad_visual_content_height(habilidad, font_size, max_width, line_spacing, horizontal_padding):
+def _compute_habilidad_visual_content_height(habilidad, font_size, max_width, line_spacing, horizontal_padding, card_type=None):
     words = _build_habilidad_word_tokens(habilidad, font_size)
     if not words:
         return max(1, int(font_size))
 
     usable_width = max(1, int(max_width) - max(0, int(horizontal_padding * 2)))
     line_height = int(font_size) + int(line_spacing)
-    lines = _wrap_habilidad_word_tokens(words, usable_width)
+    lines = _wrap_habilidad_word_tokens(words, usable_width, card_type=card_type)
     _, _, visual_height = _measure_habilidad_visual_block(lines, line_height, font_size)
     return visual_height
 
@@ -603,6 +707,7 @@ def _compute_layout_metrics(config, card_type='cripta', habilidad='', nombre='',
         max_width=habilidad_box['width'],
         line_spacing=int(lh.get('line_spacing', 4) or 4),
         horizontal_padding=hab_vertical_padding,
+        card_type=normalized_card_type,
     )
 
     if is_dynamic_bottom_anchor:
@@ -1044,7 +1149,8 @@ def _segment_to_tokens_libreria(segments, font_size):
 # --- Helper: renderiza texto con word-wrap y múltiples estilos ---
 def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_opacity=180,
                            bg_padding=10, vertical_padding=None, bg_radius=12, line_spacing=3,
-                           bg_color=(0, 0, 0), box_height=None, use_visual_content_height=False):
+                           bg_color=(0, 0, 0), box_height=None, use_visual_content_height=False,
+                           card_type=None):
     """Renderiza el texto de habilidad con formato mixto, word-wrap y fondo redondeado."""
     words = _build_habilidad_word_tokens(text, font_size)
     if not words:
@@ -1060,7 +1166,7 @@ def _render_habilidad_text(image, text, x, y, max_width, font_size, color, bg_op
     content_width = max(1, outer_width - (horizontal_pad * 2))
 
     line_height = font_size + line_spacing
-    lines = _wrap_habilidad_word_tokens(words, content_width)
+    lines = _wrap_habilidad_word_tokens(words, content_width, card_type=card_type)
     visual_top_offset, _, visual_content_height = _measure_habilidad_visual_block(lines, line_height, font_size)
 
     # --- Dibujar recuadro redondeado con transparencia ---
@@ -1561,7 +1667,7 @@ def _render_carta(imagen_url, nombre='', clan='', senda='', disciplinas=None, si
                 bg_opacity=hab_opacity, bg_padding=hab_padding, vertical_padding=hab_vertical_padding,
                 bg_radius=hab_radius, line_spacing=hab_line_sp,
                 bg_color=tuple(lh['bg_color']), box_height=hab_box_h,
-                use_visual_content_height=hab_use_visual_content,
+                use_visual_content_height=hab_use_visual_content, card_type=card_type,
             )
         except Exception as e:
             print(f'Error renderizando habilidad: {e}')
