@@ -15,31 +15,30 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
-
 from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
 from django.http import HttpResponseRedirect
 from django.conf import settings
 from django.conf.urls.static import static
-from apps.mis_cartas import views as mis_cartas_views
+
 
 def root_redirect(request):
-    return HttpResponseRedirect('/login/')
+    return HttpResponseRedirect("/login/")
+
 
 urlpatterns = [
-    path('', root_redirect),
-    path('admin/', admin.site.urls),
-    path('login/', auth_views.LoginView.as_view(), name='login'),
-    path('logout/', auth_views.LogoutView.as_view(), name='logout'),
-    path('importacion/', include('apps.srv_importacion.urls')),
-    path('cripta/', include('apps.cripta.urls')),
-    path('libreria/', include('apps.libreria.urls')),
-    path('mis-cartas/', include('apps.mis_cartas.urls', namespace='mis_cartas')),
-    path('pdf/', mis_cartas_views.pdf_workspace, name='pdf_workspace'),
-    path('recorte/', include('apps.srv_recorte.urls')),
-    path('srv-textos/', include('apps.srv_textos.urls')),
-    path('layouts/', include('apps.layouts.urls')),
+    path("", root_redirect),
+    path("admin/", admin.site.urls),
+    path("login/", auth_views.LoginView.as_view(), name="login"),
+    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("importacion/", include("apps.srv_importacion.urls")),
+    path("cripta/", include("apps.cripta.urls")),
+    path("libreria/", include("apps.libreria.urls")),
+    path("mis-cartas/", include("apps.mis_cartas.urls", namespace="mis_cartas")),
+    path("recorte/", include("apps.srv_recorte.urls")),
+    path("srv-textos/", include("apps.srv_textos.urls")),
+    path("layouts/", include("apps.layouts.urls")),
 ]
 
 # Servir archivos MEDIA en desarrollo
