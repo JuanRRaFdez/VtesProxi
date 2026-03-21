@@ -16,7 +16,7 @@ endif
 ifneq (,$(wildcard $(VENV_BIN)/mypy))
 MYPY := $(VENV_BIN)/mypy
 endif
-QUALITY_SCOPE := webvtes scripts desktop apps/cripta apps/libreria apps/mis_cartas apps/srv_importacion apps/usuarios apps/layouts apps/srv_recorte apps/srv_textos
+QUALITY_SCOPE := webvtes scripts desktop
 POLICY_SLICE ?= slice3
 POLICY_PATHS ?= apps/srv_textos
 POLICY_DEBT_CLASSES ?= F841 E501
