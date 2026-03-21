@@ -2,6 +2,87 @@
 
 Aplicacion Django para generar proxies de cartas (Cripta y Libreria), con recorte, render de texto/simbolos y gestion de cartas guardadas.
 
+## Baseline de seguridad y calidad
+
+### Onboarding de entorno (`SECRET_KEY`)
+
+Variables soportadas por `webvtes/settings.py`:
+
+| Variable | Uso | Valor por defecto |
+| --- | --- | --- |
+| `DJANGO_SECRET_KEY` | Clave principal de Django (recomendada siempre) | sin valor |
+| `DJANGO_ENV` | Modo de ejecucion (`local`, `desktop`, `dev`, `prod`, etc.) | `local` |
+| `DJANGO_ALLOW_LOCAL_SECRET_FALLBACK` | Permite fallback local de clave solo en `local/desktop/dev` (`1/0`, `true/false`) | `1` |
+
+Regla efectiva:
+- Si `DJANGO_SECRET_KEY` existe, se usa siempre.
+- Si no existe y el entorno es `local/desktop/dev` con fallback habilitado, se usa clave local de desarrollo.
+- Si no existe fuera de local, Django falla en arranque con `ImproperlyConfigured`.
+
+Ejemplo local:
+
+```bash
+export DJANGO_ENV=local
+export DJANGO_ALLOW_LOCAL_SECRET_FALLBACK=1
+export DJANGO_SECRET_KEY="dev-secret-opcional"
+.venv/bin/python manage.py runserver
+```
+
+Ejemplo desktop portable:
+
+```bash
+export DJANGO_ENV=desktop
+export DJANGO_ALLOW_LOCAL_SECRET_FALLBACK=1
+export WEBVTES_PORTABLE_DIR="/tmp/webvtes-portable"
+.venv/bin/python manage.py check --settings=webvtes.settings_desktop
+```
+
+Troubleshooting fail-fast:
+- Error: `DJANGO_SECRET_KEY is required outside local development mode...`
+- Causa: estas en un entorno no local (por ejemplo `prod`) sin `DJANGO_SECRET_KEY`.
+- Solucion: define `DJANGO_SECRET_KEY` o vuelve a `DJANGO_ENV=local|desktop|dev` con fallback habilitado.
+
+### Verificacion en un comando
+
+Comando base del repo:
+
+```bash
+make quality
+```
+
+`make quality` ejecuta en orden: `make lint` -> `make typecheck` -> `make check` -> `make test`.
+
+Paridad esperada:
+- Local antes de push: `make quality`
+- Pre-commit antes de commit: `.venv/bin/pre-commit run --all-files`
+- CI (`quality-gate`): mismo contrato en dos jobs (`static`: lint+typecheck, `runtime`: check+test)
+- Nota: `--all-files` revisa todo el repositorio; si aparece deuda historica no relacionada, corrige esos ficheros o ejecuta pre-commit sobre staged para validar solo tu cambio antes del commit.
+
+Si CI falla y local no, revisar primero versiones/dependencias de `.venv` y que hayas ejecutado exactamente los comandos anteriores desde la raiz del repo.
+
+### Ownership del quality gate
+
+- Politica de runtime/seguridad: `webvtes/settings.py` (secret key y fail-fast)
+- Portabilidad desktop: `webvtes/settings_desktop.py` (paths/entorno local desktop)
+- Contrato y tooling de calidad: `Makefile`, `pyproject.toml`, `.pre-commit-config.yaml`, `.github/workflows/quality.yml`
+
+### Contrato de evidencia CI para verify/archive
+
+- La evidencia valida del `quality-gate` debe incluir siempre `run_url` y `run_id`, y deberia incluir `commit_sha` para evitar ambiguedad entre reruns.
+- Capturas de pantalla o texto narrativo sin IDs estables no cuentan como prueba primaria.
+- Antes de cerrar verify/archive, valida el run con:
+
+```bash
+gh run view <run_id> --json headSha,workflowName,jobs,conclusion,url
+```
+
+- Aserciones minimas de ingestion:
+  - `workflowName == "quality-gate"`
+  - `headSha` coincide con el commit evaluado
+  - los jobs `static` y `runtime` concluyen `success`
+- Si `gh` no esta disponible (CLI/API), se permite bloque manual `ci_evidence` solo como `pass_with_warnings`; no se permite cierre sin warning.
+- Referencia completa y plantilla: `docs/quality/ci-evidence.md`
+
 ## Editor de Layouts
 
 La app `apps.layouts` permite crear y mantener layouts privados por usuario para `cripta` y `libreria`.
@@ -68,6 +149,25 @@ Usar el interprete del entorno virtual:
 /home/juanrrafdez/VtesProxi/.venv/bin/python manage.py test apps.srv_textos.tests -v 2
 /home/juanrrafdez/VtesProxi/.venv/bin/python manage.py check
 ```
+
+## Plan incremental de MyPy
+
+Matriz de rollout con alcance y responsables:
+
+| Fase | Alcance | Responsable |
+| --- | --- | --- |
+| A (activa) | `webvtes/`, `scripts/`, `desktop/` | Core platform maintainers |
+| B (adopcion) | `apps/layouts/`, `apps/srv_textos/` | Maintainers de cada dominio |
+| C (endurecimiento) | activar flags estrictos por modulo (`disallow_untyped_defs`, `warn_return_any`) y retirar ignores temporales | Quality gate maintainers |
+
+Checklist por fase:
+- [ ] Alcance documentado y validado en `pyproject.toml`
+- [ ] Owner asignado para seguimiento de fixes
+- [ ] `make typecheck` en verde sin regresiones del baseline
+
+Politica de promocion en CI para ampliar alcance MyPy:
+- La ampliacion de alcance solo pasa a gate requerido tras **2 merges consecutivos en verde** con `make typecheck` en la rama principal.
+- Si una ampliacion rompe baseline, se revierte al alcance anterior y se reintenta con overrides por modulo.
 
 ## Windows Portable Bundle
 
