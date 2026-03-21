@@ -1,0 +1,5 @@
+ruff
+mypy
+pre-commit
+# Optional for stricter Django typing in later phases:
+# django-stubs
