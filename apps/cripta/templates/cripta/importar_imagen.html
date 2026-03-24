@@ -890,7 +890,11 @@
             renderHabilidad();
         }
         function renderHabilidad() {
-            const habilidad = habilidadInput.value.trim();
+            let habilidad = habilidadInput.value.trim();
+            Object.entries(LIBRERIA_ICONS).forEach(([name]) => {
+                const regex = new RegExp(`\\[${name}\\]`, 'g');
+                habilidad = habilidad.replace(regex, `<img src='/static/icons/${name}.png' alt='${name}' class='inline-icon'>`);
+            });
             const cartaImg = getCartaImg();
             const imagenUrl = originalRecorteUrl;
             const valor = nombreInput.value.trim();
@@ -1002,7 +1006,7 @@
             });
         });
 
-        // --- RESTO DEL JS (recorte, cropper, etc) --- 
+        // --- RESTO DEL JS (recorte, cropper, etc) ---
         let cropper;
         const input = document.getElementById('inputImagen');
         const importarBtn = document.getElementById('importarBtn');

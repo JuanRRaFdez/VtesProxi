@@ -2,5 +2,5 @@ from django.apps import AppConfig
 
 
 class LibreriaConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'apps.libreria'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.libreria"

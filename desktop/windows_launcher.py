@@ -13,11 +13,11 @@ from desktop.runtime import default_portable_dir, default_seed_dir, ensure_seede
 
 
 def parse_args(argv=None):
-    parser = argparse.ArgumentParser(description='Launch WebVTES locally on Windows.')
-    parser.add_argument('--serve', action='store_true', help='Run the local Django server')
-    parser.add_argument('--port', type=int, default=8000, help='Preferred local port')
-    parser.add_argument('--portable-dir', default='', help='Portable runtime directory')
-    parser.add_argument('--seed-dir', default='', help='Seed directory for first run')
+    parser = argparse.ArgumentParser(description="Launch WebVTES locally on Windows.")
+    parser.add_argument("--serve", action="store_true", help="Run the local Django server")
+    parser.add_argument("--port", type=int, default=8000, help="Preferred local port")
+    parser.add_argument("--portable-dir", default="", help="Portable runtime directory")
+    parser.add_argument("--seed-dir", default="", help="Seed directory for first run")
     return parser.parse_args(argv)
 
 
@@ -34,41 +34,41 @@ def choose_port(preferred_port=8000, attempts=20):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
-                sock.bind(('127.0.0.1', port))
+                sock.bind(("127.0.0.1", port))
             except OSError:
                 continue
             return port
-    raise RuntimeError('No free local port found')
+    raise RuntimeError("No free local port found")
 
 
 def build_server_command(port, portable_dir, seed_dir):
     base_command = [sys.executable]
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         return base_command + [
-            '--serve',
-            '--port',
+            "--serve",
+            "--port",
             str(port),
-            '--portable-dir',
+            "--portable-dir",
             str(portable_dir),
-            '--seed-dir',
+            "--seed-dir",
             str(seed_dir),
         ]
 
     return base_command + [
         str(Path(__file__).resolve()),
-        '--serve',
-        '--port',
+        "--serve",
+        "--port",
         str(port),
-        '--portable-dir',
+        "--portable-dir",
         str(portable_dir),
-        '--seed-dir',
+        "--seed-dir",
         str(seed_dir),
     ]
 
 
 def wait_for_server(port, timeout_seconds=30):
     deadline = time.time() + timeout_seconds
-    url = f'http://127.0.0.1:{port}/login/'
+    url = f"http://127.0.0.1:{port}/login/"
     while time.time() < deadline:
         try:
             with urllib.request.urlopen(url, timeout=1):
@@ -80,17 +80,19 @@ def wait_for_server(port, timeout_seconds=30):
 
 def run_server(port, portable_dir):
     _ensure_project_root_on_path()
-    os.environ['DJANGO_SETTINGS_MODULE'] = 'webvtes.settings_desktop'
-    os.environ['WEBVTES_PORTABLE_DIR'] = str(portable_dir)
+    os.environ["DJANGO_SETTINGS_MODULE"] = "webvtes.settings_desktop"
+    os.environ["WEBVTES_PORTABLE_DIR"] = str(portable_dir)
 
     from django.core.management import execute_from_command_line
 
-    execute_from_command_line([
-        'manage.py',
-        'runserver',
-        f'127.0.0.1:{port}',
-        '--noreload',
-    ])
+    execute_from_command_line(
+        [
+            "manage.py",
+            "runserver",
+            f"127.0.0.1:{port}",
+            "--noreload",
+        ]
+    )
 
 
 def run_supervisor(port, portable_dir, seed_dir):
@@ -100,9 +102,9 @@ def run_supervisor(port, portable_dir, seed_dir):
     subprocess.Popen(command, cwd=str(Path(__file__).resolve().parent.parent))
 
     if not wait_for_server(resolved_port):
-        raise RuntimeError(f'Local server did not start on port {resolved_port}')
+        raise RuntimeError(f"Local server did not start on port {resolved_port}")
 
-    webbrowser.open(f'http://127.0.0.1:{resolved_port}/login/')
+    webbrowser.open(f"http://127.0.0.1:{resolved_port}/login/")
     return resolved_port
 
 
@@ -119,5 +121,5 @@ def main(argv=None):
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     raise SystemExit(main())

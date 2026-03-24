@@ -45,3 +45,6 @@ Thumbs.db
 
 # Local git worktrees
 .worktrees/
+
+# Agent registry artifacts
+.atl/

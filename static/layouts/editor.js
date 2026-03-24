@@ -40,7 +40,7 @@
     };
     const MAX_CRIPTA_Y_GAP = 3000;
 
-    const layerOrder = ['nombre', 'clan', 'senda', 'disciplinas', 'simbolos', 'habilidad', 'coste', 'cripta', 'ilustrador'];
+    const layerOrder = ['nombre', 'clan', 'senda', 'disciplinas', 'simbolos', 'tipos_accion', 'habilidad', 'coste', 'cripta', 'ilustrador'];
     const textRuleLayers = ['nombre', 'ilustrador'];
     const layerProfiles = {
         nombre: { invisible: true, resizable: true },
@@ -48,6 +48,7 @@
         senda: { invisible: true, resizable: true, square: true },
         disciplinas: { invisible: true, resizable: true },
         simbolos: { invisible: true, resizable: true },
+        tipos_accion: { invisible: false, resizable: true }
         habilidad: { invisible: true, resizable: true },
         coste: { invisible: true, resizable: true, square: true },
         cripta: { invisible: true, resizable: false, fixedFont: true },
@@ -637,6 +638,8 @@
         };
     }
 
+    import { actionSymbolsMappings } from '/static/assets/icons/actionSymbolsMappings.js';
+
     function renderLayers() {
         overlays.innerHTML = '';
         const activeLayout = getActiveLayout();
@@ -665,6 +668,12 @@
             const profile = profileForLayer(layerName);
             const frame = modelToDisplay(frameFromSection(layerName, section, carta));
             const layer = document.createElement('div');
+            if (layerName === 'tipos_accion' && section.text) {
+                const actionIcon = document.createElement('img');
+                actionIcon.src = actionSymbolsMappings[section.text] || '/static/assets/icons/default_icon.png';
+                console.log('Rendered icon for', section.text, 'with src:', actionIcon.src);
+                layer.appendChild(actionIcon);
+            }
             layer.className = 'layout-layer';
             if (profile.invisible) {
                 layer.classList.add('layout-layer--invisible');

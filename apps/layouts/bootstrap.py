@@ -2,12 +2,12 @@ from apps.layouts.models import UserLayout
 from apps.layouts.services import load_classic_seed, validate_layout_config
 
 
-DEFAULT_LAYOUT_NAME = 'classic'
-DEFAULT_CARD_TYPES = ('cripta', 'libreria')
+DEFAULT_LAYOUT_NAME = "classic"
+DEFAULT_CARD_TYPES = ("cripta", "libreria")
 
 
 def ensure_default_layouts_for_user(user):
-    if not user or not getattr(user, 'pk', None):
+    if not user or not getattr(user, "pk", None):
         return
 
     for card_type in DEFAULT_CARD_TYPES:
@@ -27,7 +27,7 @@ def ensure_default_layouts_for_user(user):
         if classic_layout:
             if not classic_layout.is_default:
                 classic_layout.is_default = True
-                classic_layout.save(update_fields=['is_default'])
+                classic_layout.save(update_fields=["is_default"])
             continue
 
         UserLayout.objects.create(

@@ -18,66 +18,66 @@ from apps.srv_textos.views import _prepare_render_source_from_path
 
 
 FIXED_LAYOUT_PREVIEWS = {
-    'cripta': {
-        'card_name': 'Mimir',
-        'image_path': 'static/layouts/images/Mimir.png',
-        'path': 'caine.png',
-        'illustrator': 'Crafted with AI',
+    "cripta": {
+        "card_name": "Mimir",
+        "image_path": "static/layouts/images/Mimir.png",
+        "path": "caine.png",
+        "illustrator": "Crafted with AI",
     },
-    'libreria': {
-        'card_name': '.44 Magnum',
-        'image_path': 'static/layouts/images/44. magnum.png',
-        'nombre': 'Muestra de Libreria',
-        'clan': 'gangrel.png',
-        'path': 'death.png',
-        'coste': 'pool2',
-        'disciplinas': [
-            {'name': 'ofu', 'level': 'inf'},
-            {'name': 'dom', 'level': 'inf'},
-            {'name': 'tha', 'level': 'inf'},
+    "libreria": {
+        "card_name": ".44 Magnum",
+        "image_path": "static/layouts/images/44. magnum.png",
+        "nombre": "Muestra de Libreria",
+        "clan": "gangrel.png",
+        "path": "death.png",
+        "coste": "pool2",
+        "disciplinas": [
+            {"name": "ofu", "level": "inf"},
+            {"name": "dom", "level": "inf"},
+            {"name": "tha", "level": "inf"},
         ],
-        'simbolos': ['action', 'equipment'],
-        'habilidad': 'Texto de referencia para ajustar el layout de libreria.',
-        'illustrator': 'Crafted with AI',
+        "simbolos": ["action", "equipment"],
+        "habilidad": "Texto de referencia para ajustar el layout de libreria.",
+        "illustrator": "Crafted with AI",
     },
 }
 
 
 @login_required
 def editor(request):
-    card_type = (request.GET.get('card_type') or 'cripta').strip().lower()
-    if card_type not in ('cripta', 'libreria'):
-        card_type = 'cripta'
+    card_type = (request.GET.get("card_type") or "cripta").strip().lower()
+    if card_type not in ("cripta", "libreria"):
+        card_type = "cripta"
 
     layouts = list(
-        UserLayout.objects.filter(user=request.user, card_type=card_type).order_by('name', 'id')
+        UserLayout.objects.filter(user=request.user, card_type=card_type).order_by("name", "id")
     )
     active_layout = next((layout for layout in layouts if layout.is_default), None)
     if active_layout is None and layouts:
         active_layout = layouts[0]
 
     context = {
-        'initial_card_type': card_type,
-        'initial_layouts': [_serialize_layout(layout) for layout in layouts],
-        'active_layout_id': active_layout.id if active_layout else None,
+        "initial_card_type": card_type,
+        "initial_layouts": [_serialize_layout(layout) for layout in layouts],
+        "active_layout_id": active_layout.id if active_layout else None,
     }
-    return render(request, 'layouts/editor.html', context)
+    return render(request, "layouts/editor.html", context)
 
 
 def _serialize_layout(layout):
     return {
-        'id': layout.id,
-        'name': layout.name,
-        'card_type': layout.card_type,
-        'config': normalize_layout_config(layout.card_type, layout.config),
-        'is_default': layout.is_default,
+        "id": layout.id,
+        "name": layout.name,
+        "card_type": layout.card_type,
+        "config": normalize_layout_config(layout.card_type, layout.config),
+        "is_default": layout.is_default,
     }
 
 
 def _get_payload(request):
-    if request.content_type and 'application/json' in request.content_type:
+    if request.content_type and "application/json" in request.content_type:
         try:
-            return json.loads(request.body.decode('utf-8') or '{}')
+            return json.loads(request.body.decode("utf-8") or "{}")
         except json.JSONDecodeError:
             return None
     return request.POST
@@ -85,33 +85,33 @@ def _get_payload(request):
 
 @login_required
 def api_list(request):
-    if request.method != 'GET':
-        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
 
-    card_type = (request.GET.get('card_type') or '').strip().lower()
+    card_type = (request.GET.get("card_type") or "").strip().lower()
     layouts = UserLayout.objects.filter(user=request.user)
     if card_type:
         layouts = layouts.filter(card_type=card_type)
 
-    payload = [_serialize_layout(layout) for layout in layouts.order_by('name')]
-    return JsonResponse({'layouts': payload})
+    payload = [_serialize_layout(layout) for layout in layouts.order_by("name")]
+    return JsonResponse({"layouts": payload})
 
 
 @login_required
 def api_create(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
 
     payload = _get_payload(request)
     if payload is None:
-        return JsonResponse({'error': 'JSON inválido'}, status=400)
+        return JsonResponse({"error": "JSON inválido"}, status=400)
 
-    name = (payload.get('name') or '').strip()
-    card_type = (payload.get('card_type') or '').strip().lower()
+    name = (payload.get("name") or "").strip()
+    card_type = (payload.get("card_type") or "").strip().lower()
     if not name:
-        return JsonResponse({'error': 'name es obligatorio'}, status=400)
-    if card_type not in ('cripta', 'libreria'):
-        return JsonResponse({'error': 'card_type inválido'}, status=400)
+        return JsonResponse({"error": "name es obligatorio"}, status=400)
+    if card_type not in ("cripta", "libreria"):
+        return JsonResponse({"error": "card_type inválido"}, status=400)
 
     try:
         layout = UserLayout.objects.create(
@@ -122,135 +122,135 @@ def api_create(request):
             is_default=False,
         )
     except IntegrityError:
-        return JsonResponse({'error': 'Nombre de layout duplicado'}, status=400)
+        return JsonResponse({"error": "Nombre de layout duplicado"}, status=400)
 
-    return JsonResponse({'layout': _serialize_layout(layout)}, status=201)
+    return JsonResponse({"layout": _serialize_layout(layout)}, status=201)
 
 
 @login_required
 def api_preview(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
 
     payload = _get_payload(request)
     if payload is None:
-        return JsonResponse({'error': 'JSON inválido'}, status=400)
+        return JsonResponse({"error": "JSON inválido"}, status=400)
 
-    card_type = (payload.get('card_type') or '').strip().lower()
-    layout_config = payload.get('layout_config')
+    card_type = (payload.get("card_type") or "").strip().lower()
+    layout_config = payload.get("layout_config")
     if card_type not in FIXED_LAYOUT_PREVIEWS:
-        return JsonResponse({'error': 'card_type inválido'}, status=400)
+        return JsonResponse({"error": "card_type inválido"}, status=400)
     if layout_config is None:
-        return JsonResponse({'error': 'layout_config es obligatorio'}, status=400)
+        return JsonResponse({"error": "layout_config es obligatorio"}, status=400)
 
     try:
-        validated_layout = validate_layout_config(card_type, layout_config)
+        validate_layout_config(card_type, layout_config)
     except LayoutValidationError as exc:
-        return JsonResponse({'error': str(exc)}, status=400)
+        return JsonResponse({"error": str(exc)}, status=400)
 
     preview = FIXED_LAYOUT_PREVIEWS[card_type]
-    imagen_abspath = os.path.join(settings.BASE_DIR, preview['image_path'])
+    imagen_abspath = os.path.join(settings.BASE_DIR, preview["image_path"])
     preview_url = _prepare_render_source_from_path(
         imagen_abspath,
-        target_name=preview['card_name'],
+        target_name=preview["card_name"],
     )
     if not preview_url:
-        return JsonResponse({'error': 'Imagen de preview no encontrada'}, status=404)
+        return JsonResponse({"error": "Imagen de preview no encontrada"}, status=404)
 
-    return JsonResponse({'imagen_url': preview_url})
+    return JsonResponse({"imagen_url": preview_url})
 
 
 @login_required
 def api_detail(request, layout_id):
-    if request.method != 'GET':
-        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    if request.method != "GET":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
 
     layout = get_object_or_404(UserLayout, id=layout_id, user=request.user)
-    return JsonResponse({'layout': _serialize_layout(layout)})
+    return JsonResponse({"layout": _serialize_layout(layout)})
 
 
 @login_required
 def api_update_config(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
 
     payload = _get_payload(request)
     if payload is None:
-        return JsonResponse({'error': 'JSON inválido'}, status=400)
+        return JsonResponse({"error": "JSON inválido"}, status=400)
 
-    layout_id = payload.get('layout_id')
-    config = payload.get('config')
+    layout_id = payload.get("layout_id")
+    config = payload.get("config")
     if not layout_id:
-        return JsonResponse({'error': 'layout_id es obligatorio'}, status=400)
+        return JsonResponse({"error": "layout_id es obligatorio"}, status=400)
     if config is None:
-        return JsonResponse({'error': 'config es obligatorio'}, status=400)
+        return JsonResponse({"error": "config es obligatorio"}, status=400)
 
     layout = get_object_or_404(UserLayout, id=layout_id, user=request.user)
     try:
         layout.config = validate_layout_config(layout.card_type, config)
     except LayoutValidationError as exc:
-        return JsonResponse({'error': str(exc)}, status=400)
+        return JsonResponse({"error": str(exc)}, status=400)
 
-    layout.save(update_fields=['config'])
-    return JsonResponse({'layout': _serialize_layout(layout)})
+    layout.save(update_fields=["config"])
+    return JsonResponse({"layout": _serialize_layout(layout)})
 
 
 @login_required
 def api_rename(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
 
     payload = _get_payload(request)
     if payload is None:
-        return JsonResponse({'error': 'JSON inválido'}, status=400)
+        return JsonResponse({"error": "JSON inválido"}, status=400)
 
-    layout_id = payload.get('layout_id')
-    name = (payload.get('name') or '').strip()
+    layout_id = payload.get("layout_id")
+    name = (payload.get("name") or "").strip()
     if not layout_id:
-        return JsonResponse({'error': 'layout_id es obligatorio'}, status=400)
+        return JsonResponse({"error": "layout_id es obligatorio"}, status=400)
     if not name:
-        return JsonResponse({'error': 'name es obligatorio'}, status=400)
+        return JsonResponse({"error": "name es obligatorio"}, status=400)
 
     layout = get_object_or_404(UserLayout, id=layout_id, user=request.user)
     layout.name = name
     try:
-        layout.save(update_fields=['name'])
+        layout.save(update_fields=["name"])
     except IntegrityError:
-        return JsonResponse({'error': 'Nombre de layout duplicado'}, status=400)
+        return JsonResponse({"error": "Nombre de layout duplicado"}, status=400)
 
-    return JsonResponse({'layout': _serialize_layout(layout)})
+    return JsonResponse({"layout": _serialize_layout(layout)})
 
 
 @login_required
 def api_delete(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
 
     payload = _get_payload(request)
     if payload is None:
-        return JsonResponse({'error': 'JSON inválido'}, status=400)
+        return JsonResponse({"error": "JSON inválido"}, status=400)
 
-    layout_id = payload.get('layout_id')
+    layout_id = payload.get("layout_id")
     if not layout_id:
-        return JsonResponse({'error': 'layout_id es obligatorio'}, status=400)
+        return JsonResponse({"error": "layout_id es obligatorio"}, status=400)
 
     layout = get_object_or_404(UserLayout, id=layout_id, user=request.user)
     layout.delete()
-    return JsonResponse({'ok': True})
+    return JsonResponse({"ok": True})
 
 
 @login_required
 def api_set_default(request):
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Método no permitido'}, status=405)
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
 
     payload = _get_payload(request)
     if payload is None:
-        return JsonResponse({'error': 'JSON inválido'}, status=400)
+        return JsonResponse({"error": "JSON inválido"}, status=400)
 
-    layout_id = payload.get('layout_id')
+    layout_id = payload.get("layout_id")
     if not layout_id:
-        return JsonResponse({'error': 'layout_id es obligatorio'}, status=400)
+        return JsonResponse({"error": "layout_id es obligatorio"}, status=400)
 
     layout = get_object_or_404(UserLayout, id=layout_id, user=request.user)
 
@@ -261,6 +261,6 @@ def api_set_default(request):
             is_default=True,
         ).exclude(id=layout.id).update(is_default=False)
         layout.is_default = True
-        layout.save(update_fields=['is_default'])
+        layout.save(update_fields=["is_default"])
 
-    return JsonResponse({'layout': _serialize_layout(layout)})
+    return JsonResponse({"layout": _serialize_layout(layout)})

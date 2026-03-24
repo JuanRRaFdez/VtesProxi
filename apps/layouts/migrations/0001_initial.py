@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -15,17 +14,42 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='UserLayout',
+            name="UserLayout",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=80)),
-                ('card_type', models.CharField(choices=[('cripta', 'cripta'), ('libreria', 'libreria')], max_length=16)),
-                ('config', models.JSONField(default=dict)),
-                ('is_default', models.BooleanField(default=False)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("name", models.CharField(max_length=80)),
+                (
+                    "card_type",
+                    models.CharField(
+                        choices=[("cripta", "cripta"), ("libreria", "libreria")], max_length=16
+                    ),
+                ),
+                ("config", models.JSONField(default=dict)),
+                ("is_default", models.BooleanField(default=False)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL
+                    ),
+                ),
             ],
             options={
-                'constraints': [models.UniqueConstraint(fields=('user', 'card_type', 'name'), name='layouts_unique_name_per_user_card_type'), models.UniqueConstraint(condition=models.Q(('is_default', True)), fields=('user', 'card_type'), name='layouts_one_default_per_user_card_type')],
+                "constraints": [
+                    models.UniqueConstraint(
+                        fields=("user", "card_type", "name"),
+                        name="layouts_unique_name_per_user_card_type",
+                    ),
+                    models.UniqueConstraint(
+                        condition=models.Q(("is_default", True)),
+                        fields=("user", "card_type"),
+                        name="layouts_one_default_per_user_card_type",
+                    ),
+                ],
             },
         ),
     ]

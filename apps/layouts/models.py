@@ -5,8 +5,8 @@ from django.db.models import Q
 
 class UserLayout(models.Model):
     CARD_TYPE_CHOICES = [
-        ('cripta', 'cripta'),
-        ('libreria', 'libreria'),
+        ("cripta", "cripta"),
+        ("libreria", "libreria"),
     ]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -18,12 +18,12 @@ class UserLayout(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['user', 'card_type', 'name'],
-                name='layouts_unique_name_per_user_card_type',
+                fields=["user", "card_type", "name"],
+                name="layouts_unique_name_per_user_card_type",
             ),
             models.UniqueConstraint(
-                fields=['user', 'card_type'],
+                fields=["user", "card_type"],
                 condition=Q(is_default=True),
-                name='layouts_one_default_per_user_card_type',
+                name="layouts_one_default_per_user_card_type",
             ),
         ]
