@@ -890,11 +890,7 @@
             renderHabilidad();
         }
         function renderHabilidad() {
-            let habilidad = habilidadInput.value.trim();
-            Object.entries(LIBRERIA_ICONS).forEach(([name]) => {
-                const regex = new RegExp(`\\[${name}\\]`, 'g');
-                habilidad = habilidad.replace(regex, `<img src='/static/icons/${name}.png' alt='${name}' class='inline-icon'>`);
-            });
+            const habilidad = habilidadInput.value.trim();
             const cartaImg = getCartaImg();
             const imagenUrl = originalRecorteUrl;
             const valor = nombreInput.value.trim();

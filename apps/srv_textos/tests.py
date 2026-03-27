@@ -491,6 +491,21 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
 
         self.assertIsNone(path)
 
+    def test_inline_symbol_path_resolves_libreria_action_tags(self):
+        action_path = srv_textos_views._inline_symbol_path("[ACTION]")
+        combat_path = srv_textos_views._inline_symbol_path("[COMBAT]")
+        master_path = srv_textos_views._inline_symbol_path("[MASTER]")
+        modifier_path = srv_textos_views._inline_symbol_path("[ACTION MODIFIER]")
+
+        self.assertIsNotNone(action_path)
+        self.assertIsNotNone(combat_path)
+        self.assertIsNotNone(master_path)
+        self.assertIsNotNone(modifier_path)
+        self.assertTrue(action_path.endswith("static/icons/action.png"))
+        self.assertTrue(combat_path.endswith("static/icons/combat.png"))
+        self.assertTrue(master_path.endswith("static/icons/master.png"))
+        self.assertTrue(modifier_path.endswith("static/icons/modifier.png"))
+
     def test_segment_to_tokens_libreria_resolves_inline_discipline_symbols(self):
         tokens = srv_textos_views._segment_to_tokens_libreria(
             [{"text": "Gana [dom] y [DOM].", "style": "normal"}],
@@ -513,6 +528,20 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
 
         self.assertIn("[xyz]", text_parts)
         self.assertFalse(any(token.get("type") == "symbol" for token in tokens))
+
+    def test_segment_to_tokens_libreria_resolves_inline_action_symbols(self):
+        tokens = srv_textos_views._segment_to_tokens_libreria(
+            [{"text": "[ACTION] [COMBAT] [MASTER] [ACTION MODIFIER]", "style": "normal"}],
+            font_size=26,
+        )
+
+        symbol_paths = [token["path"] for token in tokens if token.get("type") == "symbol"]
+
+        self.assertEqual(len(symbol_paths), 4)
+        self.assertTrue(any(path.endswith("static/icons/action.png") for path in symbol_paths))
+        self.assertTrue(any(path.endswith("static/icons/combat.png") for path in symbol_paths))
+        self.assertTrue(any(path.endswith("static/icons/master.png") for path in symbol_paths))
+        self.assertTrue(any(path.endswith("static/icons/modifier.png") for path in symbol_paths))
 
     def test_render_habilidad_cripta_loads_inline_inferior_and_superior_discipline_symbols(self):
         image = Image.new("RGBA", (420, 420), (0, 0, 0, 0))
@@ -619,6 +648,35 @@ class HabilidadRenderAlignmentTests(SimpleTestCase):
 
         symbol_paths = [call.args[0] for call in mock_load_symbol.call_args_list]
         self.assertTrue(any(path.endswith("static/icons/directed.png") for path in symbol_paths))
+
+    def test_render_habilidad_libreria_loads_inline_action_symbols(self):
+        image = Image.new("RGBA", (420, 420), (0, 0, 0, 0))
+        fake_symbol = Image.new("RGBA", (24, 24), (255, 255, 255, 255))
+
+        with patch(
+            "apps.srv_textos.views._load_symbol", return_value=fake_symbol
+        ) as mock_load_symbol:
+            srv_textos_views._render_habilidad_text(
+                image=image,
+                text="[ACTION] [COMBAT] [MASTER] [ACTION MODIFIER]",
+                x=90,
+                y=110,
+                max_width=240,
+                font_size=26,
+                color="white",
+                bg_opacity=0,
+                bg_padding=10,
+                bg_radius=0,
+                line_spacing=3,
+                bg_color=(0, 0, 0),
+                box_height=130,
+            )
+
+        symbol_paths = [call.args[0] for call in mock_load_symbol.call_args_list]
+        self.assertTrue(any(path.endswith("static/icons/action.png") for path in symbol_paths))
+        self.assertTrue(any(path.endswith("static/icons/combat.png") for path in symbol_paths))
+        self.assertTrue(any(path.endswith("static/icons/master.png") for path in symbol_paths))
+        self.assertTrue(any(path.endswith("static/icons/modifier.png") for path in symbol_paths))
 
     def test_render_habilidad_reserves_leading_column_for_discipline_prefixed_line(self):
         image = Image.new("RGBA", (420, 420), (0, 0, 0, 0))

@@ -1100,6 +1100,30 @@ def _discipline_symbol_path(code, is_superior):
     return None
 
 
+INLINE_ACTION_SYMBOLS = {
+    "action": "action",
+    "combat": "combat",
+    "master": "master",
+    "action modifier": "modifier",
+}
+
+
+def _action_symbol_path(label):
+    normalized = re.sub(r"\s+", " ", (label or "").strip().lower().replace("_", " "))
+    icon_name = INLINE_ACTION_SYMBOLS.get(normalized)
+    if not icon_name:
+        return None
+
+    base = os.path.join(settings.BASE_DIR, "static", "icons", icon_name)
+    png_path = base + ".png"
+    if os.path.exists(png_path):
+        return png_path
+    svg_path = base + ".svg"
+    if os.path.exists(svg_path):
+        return svg_path
+    return None
+
+
 def _special_symbol_path(symbol):
     if symbol == "Ⓓ":
         candidates = [
@@ -1119,9 +1143,13 @@ def _inline_symbol_path(symbol):
     if raw == "(D)":
         return _special_symbol_path("Ⓓ")
     if raw.startswith("[") and raw.endswith("]"):
-        code, is_superior = _discipline_ref_to_code(raw[1:-1])
+        token = raw[1:-1]
+        code, is_superior = _discipline_ref_to_code(token)
         if code:
             return _discipline_symbol_path(code, is_superior)
+        action_path = _action_symbol_path(token)
+        if action_path:
+            return action_path
         return None
     return _special_symbol_path(raw)
 
